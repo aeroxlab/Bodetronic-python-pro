@@ -163,6 +163,10 @@ class Advertisement(Base):
     height = Column(String(40), default="auto")
     duration_seconds = Column(Integer, default=8)
     entrance_style = Column(String(80), default="fade")
+    bg_color = Column(String(40), default="#0F172A")
+    text_color = Column(String(40), default="#FFFFFF")
+    font_size = Column(Integer, default=16)
+    speed = Column(Integer, default=16)
     active = Column(Boolean, default=True)
     starts_at = Column(DateTime, nullable=True)
     ends_at = Column(DateTime, nullable=True)
@@ -567,6 +571,10 @@ def ensure_sqlite_schema():
                 "height": "VARCHAR(40) DEFAULT 'auto'",
                 "duration_seconds": "INTEGER DEFAULT 8",
                 "entrance_style": "VARCHAR(80) DEFAULT 'fade'",
+                "bg_color": "VARCHAR(40) DEFAULT '#0F172A'",
+                "text_color": "VARCHAR(40) DEFAULT '#FFFFFF'",
+                "font_size": "INTEGER DEFAULT 16",
+                "speed": "INTEGER DEFAULT 16",
             }
             for col, sql in ad_add.items():
                 if col not in ad_cols:
@@ -829,7 +837,9 @@ def admin_list_ads(db=Depends(get_db), user=Depends(require_admin)):
         "media_url": a.media_url, "media_type": a.media_type, "location": a.location,
         "display_mode": a.display_mode, "sponsor_name": a.sponsor_name, "link_url": a.link_url,
         "width": a.width, "height": a.height, "duration_seconds": a.duration_seconds,
-        "entrance_style": a.entrance_style, "active": a.active,
+        "entrance_style": a.entrance_style, "bg_color": getattr(a, "bg_color", "#0F172A"),
+        "text_color": getattr(a, "text_color", "#FFFFFF"), "font_size": getattr(a, "font_size", 16),
+        "speed": getattr(a, "speed", 16), "active": a.active,
         "starts_at": a.starts_at.isoformat() if a.starts_at else "",
         "ends_at": a.ends_at.isoformat() if a.ends_at else "",
     } for a in rows]}
@@ -850,6 +860,10 @@ def admin_add_ad(payload: dict, db=Depends(get_db), user=Depends(require_admin))
         height=str(payload.get("height") or "auto"),
         duration_seconds=int(payload.get("duration_seconds") or 8),
         entrance_style=payload.get("entrance_style", "fade"),
+        bg_color=payload.get("bg_color", "#0F172A"),
+        text_color=payload.get("text_color", "#FFFFFF"),
+        font_size=int(payload.get("font_size") or 16),
+        speed=int(payload.get("speed") or 16),
         active=bool(payload.get("active", True)),
         starts_at=datetime.fromisoformat(payload["starts_at"]) if payload.get("starts_at") else None,
         ends_at=datetime.fromisoformat(payload["ends_at"]) if payload.get("ends_at") else None,
@@ -884,7 +898,9 @@ def client_bundle(client_id: Optional[int] = None, db=Depends(get_db), user=Depe
             "id": a.id, "title": a.title, "text_body": a.text_body, "media_url": a.media_url,
             "media_type": a.media_type, "location": a.location, "display_mode": a.display_mode,
             "sponsor_name": a.sponsor_name, "link_url": a.link_url, "width": a.width, "height": a.height,
-            "duration_seconds": a.duration_seconds, "entrance_style": a.entrance_style
+            "duration_seconds": a.duration_seconds, "entrance_style": a.entrance_style,
+            "bg_color": getattr(a, "bg_color", "#0F172A"), "text_color": getattr(a, "text_color", "#FFFFFF"),
+            "font_size": getattr(a, "font_size", 16), "speed": getattr(a, "speed", 16)
         })
 
     return {
