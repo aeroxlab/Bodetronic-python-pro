@@ -1,18 +1,20 @@
-# Bodetronic Python Pro
+# Bodetronic Python Pro Final
 
-## Local
+Build Command:
+
 ```bash
 pip install -r requirements.txt
-uvicorn main:app --reload
 ```
-Abrir: http://127.0.0.1:8000
+
+Start Command:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
 
 Login maestro:
-- Usuario: 73221820
-- Contrasena: jdiazg20
 
-## Render
-- Build: `pip install -r requirements.txt`
-- Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-
-Incluye CRM, clientes, accesos, servicios, diseno, pagos/QR, publicidad, productos, stock, POS, creditos, vencimientos, camara/comparacion visual basica y n8n.
+```text
+Usuario: 73221820
+Contraseña: jdiazg20
+```
