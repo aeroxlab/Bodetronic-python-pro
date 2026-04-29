@@ -9,7 +9,7 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import requests
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -187,6 +187,19 @@ class Product(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     client = relationship("Client", back_populates="products")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id"), index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    image_url = Column(Text, default="")
+    visual_hash = Column(String(120), default="")
+    position = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+    product = relationship("Product", back_populates="images")
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
@@ -207,6 +220,7 @@ class Sale(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), index=True)
     service = Column(String(80), default="bodega_pos")
     customer_name = Column(String(180), default="Cliente general")
+    customer_phone = Column(String(50), default="")
     subtotal = Column(Float, default=0)
     discount = Column(Float, default=0)
     total = Column(Float, default=0)
@@ -490,6 +504,7 @@ def product_dict(p: Product):
         "category": p.category,
         "presentation": p.presentation,
         "image_url": p.image_url,
+        "images": [img.image_url for img in getattr(p, "images", []) if img.image_url],
         "stock": p.stock,
         "min_stock": p.min_stock,
         "real_price": p.real_price,
@@ -527,8 +542,23 @@ def call_webhook(url, payload):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+def ensure_sqlite_schema():
+    # Render/SQLite no agrega columnas nuevas con create_all. Esta mini migración
+    # mantiene el sistema compatible cuando actualizamos el paquete.
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    try:
+        with engine.connect() as conn:
+            sales_cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(sales)").fetchall()]
+            if "customer_phone" not in sales_cols:
+                conn.exec_driver_sql("ALTER TABLE sales ADD COLUMN customer_phone VARCHAR(50) DEFAULT ''")
+            conn.commit()
+    except Exception:
+        pass
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    ensure_sqlite_schema()
     db = SessionLocal()
     try:
         admin = db.query(Admin).filter(Admin.username == MASTER_USER).first()
@@ -893,16 +923,25 @@ def create_product(
     service: str = Form("bodega"),
     notes: str = Form(""),
     image: UploadFile = File(None),
+    images: List[UploadFile] = File(default=[]),
     db=Depends(get_db),
     user=Depends(require_user)
 ):
     if user["role"] == "client" and int(user["client_id"]) != client_id:
         raise HTTPException(status_code=403, detail="No autorizado")
-    image_url = ""
-    vhash = ""
-    if image:
-        image_url = save_upload(image, f"client_{client_id}/products")
-        vhash = image_avg_hash(str(UPLOAD_DIR / image_url.replace("/uploads/", "")))
+    saved_images = []
+    upload_list = []
+    if image and getattr(image, "filename", ""):
+        upload_list.append(image)
+    for extra in (images or []):
+        if extra and getattr(extra, "filename", ""):
+            upload_list.append(extra)
+    for idx, f in enumerate(upload_list):
+        url = save_upload(f, f"client_{client_id}/products")
+        vh = image_avg_hash(str(UPLOAD_DIR / url.replace("/uploads/", "")))
+        saved_images.append((url, vh))
+    image_url = saved_images[0][0] if saved_images else ""
+    vhash = saved_images[0][1] if saved_images else ""
     count = db.query(Product).filter(Product.client_id == client_id).count() + 1
     p = Product(
         client_id=client_id,
@@ -925,8 +964,12 @@ def create_product(
         notes=notes,
     )
     db.add(p)
-    db.add(StockMovement(client_id=client_id, product_id=None, movement_type="CREAR_PRODUCTO", quantity=stock, old_stock=0, new_stock=stock, origin="Registro"))
+    db.flush()
+    for pos, (url, vh) in enumerate(saved_images):
+        db.add(ProductImage(product_id=p.id, client_id=client_id, image_url=url, visual_hash=vh, position=pos))
+    db.add(StockMovement(client_id=client_id, product_id=p.id, movement_type="CREAR_PRODUCTO", quantity=stock, old_stock=0, new_stock=stock, origin="Registro"))
     db.commit()
+    db.refresh(p)
     return {"ok": True, "product": product_dict(p)}
 
 @app.put("/api/products/{product_id}")
@@ -985,17 +1028,38 @@ def detect_product(client_id: int = Form(...), image: UploadFile = File(...), db
         raise HTTPException(status_code=403, detail="No autorizado")
     captured_url = save_upload(image, f"client_{client_id}/detections")
     h = image_avg_hash(str(UPLOAD_DIR / captured_url.replace("/uploads/", "")))
-    rows = db.query(Product).filter(Product.client_id == client_id, Product.active == True).all()
-    best = None
+
+    best_product = None
+    best_ref_url = ""
     best_dist = 999
-    for p in rows:
-        d = hash_distance(h, p.visual_hash)
+
+    refs = db.query(ProductImage).filter(ProductImage.client_id == client_id).all()
+    for ref in refs:
+        p = db.query(Product).get(ref.product_id)
+        if not p or not p.active:
+            continue
+        d = hash_distance(h, ref.visual_hash)
         if d is not None and d < best_dist:
-            best = p
+            best_product = p
+            best_ref_url = ref.image_url
             best_dist = d
-    if best:
-        return {"ok": True, "captured_image": captured_url, "match_distance": best_dist, "product": product_dict(best), "similar": best_dist <= 18}
-    return {"ok": False, "captured_image": captured_url, "error": "No hay productos con imagen registrada para comparar"}
+
+    # Compatibilidad con productos antiguos que solo tenían una imagen principal
+    if best_product is None:
+        for p in db.query(Product).filter(Product.client_id == client_id, Product.active == True).all():
+            d = hash_distance(h, p.visual_hash)
+            if d is not None and d < best_dist:
+                best_product = p
+                best_ref_url = p.image_url
+                best_dist = d
+
+    threshold = int(os.getenv("VISUAL_MATCH_DISTANCE", "18"))
+    if best_product and best_dist <= threshold:
+        data = product_dict(best_product)
+        data["matched_image_url"] = best_ref_url or best_product.image_url
+        return {"ok": True, "captured_image": captured_url, "match_distance": best_dist, "similar": True, "product": data}
+
+    return {"ok": False, "captured_image": captured_url, "match_distance": best_dist if best_product else None, "similar": False, "error": "No hay coincidencia con productos registrados"}
 
 # =====================
 # SALES / POS
@@ -1012,6 +1076,7 @@ def create_sale(payload: dict, db=Depends(get_db), user=Depends(require_user)):
         client_id=client_id,
         service=payload.get("service", "bodega_pos"),
         customer_name=payload.get("customer_name", "Cliente general"),
+        customer_phone=payload.get("customer_phone", ""),
         discount=float(payload.get("discount") or 0),
         payment_method=payload.get("payment_method", "Efectivo"),
         status="PAGADO",
@@ -1078,6 +1143,7 @@ def public_sale_ticket(token: str, db=Depends(get_db)):
     <p>{client.address if client else ''}</p>
     <p class="pill">Venta #{sale.id} | {peru_time_text(sale.created_at)}</p>
     <h2>Cliente: {sale.customer_name}</h2>
+    <p>Celular/WhatsApp: {sale.customer_phone or "-"}</p>
     <table><thead><tr><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th></tr></thead><tbody>{rows}</tbody></table>
     <p>Subtotal: <b>{money(sale.subtotal)}</b></p>
     <p>Descuento: <b>{money(sale.discount)}</b></p>
@@ -1102,6 +1168,8 @@ def sale_pdf(token: str, db=Depends(get_db)):
     c.drawString(50, y, f"Ticket venta #{sale.id} - {peru_time_text(sale.created_at)}")
     y -= 20
     c.drawString(50, y, f"Cliente: {sale.customer_name}")
+    y -= 18
+    c.drawString(50, y, f"WhatsApp: {sale.customer_phone or '-'}")
     y -= 30
     c.setFont("Helvetica-Bold", 10)
     c.drawString(50, y, "Producto")
