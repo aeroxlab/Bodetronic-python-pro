@@ -1,7 +1,7 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-SQLAlchemy==2.0.36
-python-multipart==0.0.19
-Pillow==11.0.0
-reportlab==4.2.5
-requests==2.32.3
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-multipart
+requests
+pillow
+reportlab

@@ -1110,6 +1110,26 @@ def update_product(product_id: int, payload: dict, db=Depends(get_db), user=Depe
     db.commit()
     return {"ok": True, "product": product_dict(p)}
 
+
+@app.post("/api/products/{product_id}/link-barcode")
+def link_product_barcode(product_id: int, payload: dict, db=Depends(get_db), user=Depends(require_user)):
+    """Vincula o reemplaza el código de barras de un producto ya entrenado.
+    No cambia stock, precios ni lógica general del producto.
+    """
+    p = db.query(Product).get(product_id)
+    if not p:
+        return {"ok": False, "error": "Producto no encontrado"}
+    if user["role"] == "client" and int(user["client_id"]) != p.client_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    barcode = re.sub(r"[^0-9A-Za-z\-_.]", "", str(payload.get("barcode") or "")).strip()
+    if not barcode:
+        return {"ok": False, "error": "Código de barras vacío"}
+    p.barcode = barcode
+    if payload.get("reference") and not p.reference:
+        p.reference = str(payload.get("reference"))
+    db.commit()
+    return {"ok": True, "product": product_dict(p)}
+
 @app.post("/api/stock/adjust")
 def adjust_stock(payload: dict, db=Depends(get_db), user=Depends(require_user)):
     p = db.query(Product).get(int(payload.get("product_id")))
@@ -1180,9 +1200,31 @@ def detect_product(client_id: int = Form(...), image: UploadFile = File(...), db
     if best_product and best_dist <= threshold:
         data = product_dict(best_product)
         data["matched_image_url"] = best_ref_url or best_product.image_url
-        return {"ok": True, "captured_image": captured_url, "match_distance": best_dist, "similar": True, "product": data}
+        return {
+            "ok": True,
+            "captured_image": captured_url,
+            "match_distance": best_dist,
+            "similar": True,
+            "product": data,
+            "field_suggestions": {
+                "product_id": best_product.id,
+                "name": product_display_name(best_product),
+                "barcode": best_product.barcode or "",
+                "internal_code": best_product.internal_code or "",
+                "reference": best_product.reference or "",
+                "sale_price": best_product.sale_price,
+                "stock": best_product.stock,
+            },
+        }
 
-    return {"ok": False, "captured_image": captured_url, "match_distance": best_dist if best_product else None, "similar": False, "error": "No hay coincidencia con productos registrados"}
+    return {
+        "ok": False,
+        "captured_image": captured_url,
+        "match_distance": best_dist if best_product else None,
+        "similar": False,
+        "field_suggestions": {},
+        "error": "No hay coincidencia con productos registrados",
+    }
 
 # =====================
 # SALES / POS
@@ -1566,3 +1608,15 @@ def send_reminder(payload: dict, db=Depends(get_db), user=Depends(require_user))
 @app.get("/api/health")
 def health():
     return {"ok": True, "app": APP_NAME, "time": peru_time_text()}
+
+# =====================
+# SPA FALLBACK
+# =====================
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+def spa_fallback(full_path: str):
+    # Evita tapar rutas reales de API/archivos públicos.
+    blocked = ("api/", "uploads/", "static/", "public/")
+    if full_path.startswith(blocked):
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+    return FileResponse("static/index.html")
+

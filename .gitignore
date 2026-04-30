@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+bodetronic.db
+.env
+.DS_Store
+uploads/*
+!uploads/.gitkeep
