@@ -431,6 +431,62 @@
   .scanner-actions{grid-template-columns:1fr}
 }
 
+
+.edit-photo-preview{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:10px;
+}
+.edit-photo-preview img{
+  width:86px;
+  height:86px;
+  object-fit:cover;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:#fff;
+}
+.suggestion-card{
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:12px;
+  margin-top:10px;
+}
+
+
+.detect-popup-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+}
+.detect-popup-img{
+  width:100%;
+  max-height:360px;
+  object-fit:contain;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:#fff;
+}
+.detect-score{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:8px 12px;
+  font-weight:900;
+  background:#ecfeff;
+  color:#0f766e;
+  margin:6px 0;
+}
+.detect-small-list{
+  max-height:280px;
+  overflow:auto;
+}
+@media(max-width:760px){
+  .detect-popup-grid{grid-template-columns:1fr}
+  .detect-popup-img{max-height:300px}
+}
+
 </style>
 </head>
 <body>
@@ -752,9 +808,13 @@ function renderProductPhotoList(){const count=PRODUCT_PHOTOS.length;el('photoCou
 async function saveProduct(){let fd=new FormData();fd.append("client_id",CLIENT.id);fd.append("name",el("pn").value);fd.append("brand",el("pb").value);fd.append("barcode",el("pbar").value);fd.append("reference",el("pref").value);fd.append("category",el("pcat")?.value||"");fd.append("presentation",el("ppres")?.value||"");fd.append("expiration_date",el("pexp")?.value||"");fd.append("stock",el("pst").value||0);fd.append("real_price",el("preal").value||0);fd.append("sale_price",el("psale").value||0);PRODUCT_PHOTOS.forEach((f,i)=>{if(i===0)fd.append("image",f);else fd.append("images",f)});showLoad("Guardando producto...");const r=await api("/api/products",{method:"POST",body:fd});hideLoad();if(!r.ok){toast(r.error||"Error","bad");return}closeModal();toast("Producto guardado con "+PRODUCT_PHOTOS.length+" foto(s)");PRODUCT_PHOTOS=[];await loadClient();clientProducts()}
 function viewProduct(id){const p=PRODUCTS.find(x=>x.id===id);modal(`<h1>${safe(productName(p))}</h1><div class="product"><div class="pimg">${p.image_url?`<img src="${absUrl(p.image_url)}">`:"IMG"}</div><div><div class="price">${money(p.sale_price)}</div><p>Stock disponible: <b>${p.stock}</b></p><p>Precio real: ${money(p.real_price)}</p></div></div><button class="dark" onclick="closeModal()">Cerrar</button>`)}
 
+let EDIT_MAIN_PHOTO=null, EDIT_EXTRA_PHOTOS=[];
 function editProduct(id){
+  EDIT_MAIN_PHOTO=null;
+  EDIT_EXTRA_PHOTOS=[];
   const p=PRODUCTS.find(x=>x.id===id);
   if(!p)return toast("Producto no encontrado","bad");
+  const imgs=(p.images||[]).map(u=>`<img src="${absUrl(u)}">`).join("");
   modal(`<h1>Editar producto</h1>
     <div class="edit-grid">
       <div><label>Nombre</label><input id="epName" value="${safe(p.name||'')}"></div>
@@ -770,10 +830,52 @@ function editProduct(id){
       <div><label>Vencimiento</label><input id="epExp" type="date" value="${safe(p.expiration_date||'')}"></div>
     </div>
     <label>Notas</label><textarea id="epNotes">${safe(p.notes||'')}</textarea>
+
+    <h2>Fotos del producto</h2>
+    <p class="muted">Cambia la foto principal o agrega más fotos de referencia para mejorar la comparación.</p>
+    <div class="scanner-actions">
+      <button class="primary" onclick="el('epMainCamera').click()">Cambiar principal con cámara</button>
+      <button class="dark" onclick="el('epMainGallery').click()">Cambiar principal desde galería</button>
+      <button class="btn" onclick="el('epMoreCamera').click()">Agregar foto con cámara</button>
+      <button class="btn" onclick="el('epMoreGallery').click()">Agregar fotos desde galería</button>
+    </div>
+    <input id="epMainCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handleEditMainPhoto(this.files)">
+    <input id="epMainGallery" class="hide" type="file" accept="image/*" onchange="handleEditMainPhoto(this.files)">
+    <input id="epMoreCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handleEditMorePhotos(this.files)">
+    <input id="epMoreGallery" class="hide" type="file" accept="image/*" multiple onchange="handleEditMorePhotos(this.files)">
+    <p class="pill">Fotos registradas: ${p.image_count||((p.images||[]).length)||0}</p>
+    <div class="edit-photo-preview">${imgs}</div>
+    <div id="editNewPhotoPreview" class="edit-photo-preview"></div>
+
     <div class="actions">
       <button class="primary" onclick="saveEditProduct(${id})">Guardar cambios</button>
       <button class="dark" onclick="closeModal()">Cancelar</button>
     </div>`);
+}
+function handleEditMainPhoto(files){
+  EDIT_MAIN_PHOTO=(files&&files[0])?files[0]:null;
+  renderEditNewPhotoPreview();
+}
+function handleEditMorePhotos(files){
+  Array.from(files||[]).forEach(f=>EDIT_EXTRA_PHOTOS.push(f));
+  renderEditNewPhotoPreview();
+  ["epMoreCamera","epMoreGallery"].forEach(id=>{if(el(id))el(id).value=""});
+}
+function renderEditNewPhotoPreview(){
+  const box=el("editNewPhotoPreview");
+  if(!box)return;
+  let html="";
+  if(EDIT_MAIN_PHOTO)html+=`<div><small>Principal nueva</small><br><img src="${URL.createObjectURL(EDIT_MAIN_PHOTO)}"></div>`;
+  EDIT_EXTRA_PHOTOS.forEach((f,i)=>html+=`<div><small>Referencia ${i+1}</small><br><img src="${URL.createObjectURL(f)}"></div>`);
+  box.innerHTML=html;
+}
+async function uploadEditProductImages(id){
+  if(!EDIT_MAIN_PHOTO && !EDIT_EXTRA_PHOTOS.length)return {ok:true};
+  const fd=new FormData();
+  fd.append("replace_main",EDIT_MAIN_PHOTO?"true":"false");
+  if(EDIT_MAIN_PHOTO)fd.append("main_image",EDIT_MAIN_PHOTO);
+  EDIT_EXTRA_PHOTOS.forEach(f=>fd.append("images",f));
+  return await api(`/api/products/${id}/images`,{method:"POST",body:fd});
 }
 async function saveEditProduct(id){
   const payload={
@@ -792,8 +894,10 @@ async function saveEditProduct(id){
   };
   showLoad("Guardando producto...");
   const r=await api(`/api/products/${id}`,{method:"PUT",body:JSON.stringify(payload)});
+  if(!r.ok){hideLoad();toast(r.error||"No se pudo guardar","bad");return}
+  const imgs=await uploadEditProductImages(id);
   hideLoad();
-  if(!r.ok){toast(r.error||"No se pudo guardar","bad");return}
+  if(!imgs.ok){toast(imgs.error||"Datos guardados, pero no se pudieron subir las fotos","bad");return}
   closeModal();
   toast("Producto actualizado");
   await loadClient();
@@ -805,35 +909,33 @@ async function adjustStock(id,type){showLoad("Actualizando stock...");const r=aw
 async function deleteProduct(id){confirmBox("Borrar producto","El producto quedará inactivo.",`doDeleteProduct(${id})`)}
 async function doDeleteProduct(id){showLoad("Borrando...");await api(`/api/products/${id}`,{method:"PUT",body:JSON.stringify({active:false})});hideLoad();await loadClient();clientProducts()}
 function clientScanner(){
-  setTitle("Cámara / Galería / Código de barras","Busca por foto, código de barras, archivo o dato manual");
+  setTitle("Scanner / Cámara","Busca productos por foto, galería, código o nombre");
   el("view").innerHTML=`<div class="card">
-    <h1>Cámara y búsqueda de productos</h1>
-    <p class="muted">Puedes tomar foto, subir una imagen desde galería, escanear código de barras con cámara o escribirlo manualmente. Si el producto ya fue entrenado con fotos, el sistema intentará reconocerlo y mostrar sus datos.</p>
+    <h1>Scanner / Cámara</h1>
 
-    <h2>Reconocimiento por imagen</h2>
+    <h2>Buscar por foto</h2>
     <div class="scanner-actions">
-      <button class="primary" onclick="el('scanCameraFile').click()">1. Tomar foto</button>
-      <button class="dark" onclick="el('scanGalleryFile').click()">2. Subir archivo / galería</button>
+      <button class="primary" onclick="el('scanCameraFile').click()">Tomar foto</button>
+      <button class="dark" onclick="el('scanGalleryFile').click()">Subir desde galería</button>
     </div>
     <input id="scanCameraFile" class="hide" type="file" accept="image/*" capture="environment" onchange="detectImageInput('scanCameraFile')">
     <input id="scanGalleryFile" class="hide" type="file" accept="image/*" onchange="detectImageInput('scanGalleryFile')">
 
     <h2>Código de barras</h2>
     <div class="scanner-actions">
-      <button class="primary" onclick="startBarcodeCamera()">Escanear con cámara</button>
-      <button class="dark" onclick="el('barcodeImageFile').click()">Subir imagen con código</button>
-      <button class="btn" onclick="manualBarcodePrompt()">Código manual</button>
+      <button class="primary" onclick="startBarcodeCamera()">Escanear</button>
+      <button class="dark" onclick="el('barcodeImageFile').click()">Subir imagen</button>
+      <button class="btn" onclick="manualBarcodePrompt()">Manual</button>
     </div>
     <input id="barcodeImageFile" class="hide" type="file" accept="image/*" onchange="detectBarcodeFromImage('barcodeImageFile')">
     <div id="barcodeCamBox" class="camera-box hide">
       <video id="barcodeVideo" playsinline muted></video>
       <div class="actions"><button class="red" onclick="stopBarcodeCamera()">Cerrar cámara</button></div>
-      <p class="muted">Apunta el código de barras. Si tu navegador no reconoce automáticamente, usa código manual o sube una imagen.</p>
     </div>
 
     <hr>
-    <label>Buscar manual por nombre, código de barras, código interno o referencia</label>
-    <input id="scanQ" placeholder="Ej: Coca, BOD-000001, 775...">
+    <label>Búsqueda manual</label>
+    <input id="scanQ" placeholder="Nombre, código interno o barras">
     <button class="primary" onclick="scanSearch()">Buscar</button>
     <div id="scanResult"></div>
   </div>`;
@@ -859,21 +961,65 @@ async function detectImageInput(inputId){
 }
 async function detectImage(){return detectImageInput("scanCameraFile")}
 function renderDetectResult(r){
-  const left=`<div class="card"><h3>Imagen capturada/cargada</h3><img class="compare-img" src="${absUrl(r.captured_image)}"></div>`;
+  const captured=absUrl(r.captured_image);
+  const left=`<div class="card"><h3>Foto tomada / cargada</h3><img class="detect-popup-img" src="${captured}"></div>`;
   let right="";
   if(r.ok&&r.similar&&r.product){
-    right=`<div class="card"><h3>Producto similar registrado</h3>
-      <img class="compare-img" src="${absUrl(r.product.matched_image_url||r.product.image_url)}"><hr>
+    right=`<div class="card"><h3>Producto encontrado</h3>
+      <img class="detect-popup-img" src="${absUrl(r.product.matched_image_url||r.product.image_url)}">
+      <div class="detect-score">Coincidencia visual: ${r.match_score??""}</div>
       ${productFoundHtml(r.product)}
       <div class="actions">
-        <button class="primary" onclick="editProduct(${r.product.id})">Editar producto detectado</button>
-        <button class="orange" onclick="stockModal(${r.product.id})">Cargar / descargar stock</button>
+        <button class="primary" onclick="closeModal();editProduct(${r.product.id})">Editar producto</button>
+        <button class="orange" onclick="closeModal();stockModal(${r.product.id})">Stock</button>
+        <button class="btn" onclick="trainCapturedToProduct(${r.product.id},'${safe(r.captured_image)}')">Guardar foto como referencia</button>
       </div>
     </div>`;
   }else{
-    right=`<div class="card"><h2>No hay coincidencia</h2><p class="muted">No se encontró un producto parecido. Puedes buscar por nombre, código de barras o referencia, o registrar este producto como nuevo.</p><button class="primary" onclick="newProductForm()">Crear producto nuevo</button></div>`;
+    const suggestions=(r.suggestions||[]).map(s=>{
+      const p=s.product;
+      return `<div class="suggestion-card">
+        <h3>${safe(productName(p))}</h3>
+        ${p.matched_image_url||p.image_url?`<img class="compare-img" src="${absUrl(p.matched_image_url||p.image_url)}">`:""}
+        <p class="muted">Parecido visual: ${s.score}</p>
+        <div class="actions">
+          <button class="primary" onclick="trainCapturedToProduct(${p.id},'${safe(r.captured_image)}')">Entrenar con esta foto</button>
+          <button class="btn" onclick="closeModal();editProduct(${p.id})">Editar</button>
+        </div>
+      </div>`;
+    }).join("");
+    const options=(PRODUCTS||[]).map(p=>`<option value="${p.id}">${safe(productName(p))}</option>`).join("");
+    right=`<div class="card"><h2>No hay coincidencia segura</h2>
+      <p class="muted">La foto fue analizada por forma, colores, bordes, etiqueta, marcas y patrones parecidos a letras/códigos.</p>
+      ${r.match_score!=null?`<div class="detect-score">Mejor parecido: ${r.match_score}</div>`:""}
+      ${suggestions?`<h3>Posibles productos</h3><div class="detect-small-list">${suggestions}</div>`:""}
+      <label>Entrenar producto existente</label>
+      <select id="trainProductSelect">${options}</select>
+      <div class="actions">
+        <button class="primary" onclick="trainCapturedToProduct(el('trainProductSelect').value,'${safe(r.captured_image)}')">Guardar como referencia</button>
+        <button class="dark" onclick="closeModal();newProductForm()">Crear producto nuevo</button>
+      </div>
+    </div>`;
   }
-  el("scanResult").innerHTML=`<div class="grid2">${left}${right}</div>`;
+
+  const html=`<h1>Resultado del análisis</h1>
+    <div class="detect-popup-grid">${left}${right}</div>
+    <div class="actions"><button class="dark" onclick="closeModal()">Cerrar</button></div>`;
+  modal(html);
+
+  // También dejamos un resumen pequeño debajo del scanner para que no se pierda.
+  if(el("scanResult")){
+    el("scanResult").innerHTML=`<div class="card"><h3>Último análisis</h3><img class="compare-img" src="${captured}"><p>${r.ok&&r.similar?"Producto encontrado":"Sin coincidencia segura"}</p><button class="btn" onclick='renderDetectResult(${JSON.stringify(r).replace(/'/g,"&apos;")})'>Ver resultado</button></div>`;
+  }
+}
+async function trainCapturedToProduct(productId,imageUrl){
+  if(!productId)return toast("Selecciona un producto","bad");
+  showLoad("Entrenando producto...");
+  const r=await api(`/api/products/${productId}/train-from-captured`,{method:"POST",body:JSON.stringify({image_url:imageUrl})});
+  hideLoad();
+  if(!r.ok){toast(r.error||"No se pudo entrenar","bad");return}
+  toast("Foto agregada como referencia");
+  await loadClient();
 }
 
 let BARCODE_STREAM=null, BARCODE_TIMER=null;
