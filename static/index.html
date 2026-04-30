@@ -487,6 +487,47 @@
   .detect-popup-img{max-height:300px}
 }
 
+
+.photo-thumb{
+  position:relative;
+  width:86px;
+  height:86px;
+  border-radius:16px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:#fff;
+}
+.photo-thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.photo-x{
+  position:absolute;
+  top:4px;
+  right:4px;
+  width:26px;
+  height:26px;
+  border:0;
+  border-radius:999px;
+  background:rgba(239,68,68,.95);
+  color:#fff;
+  font-weight:900;
+  line-height:1;
+  cursor:pointer;
+  box-shadow:0 6px 16px rgba(0,0,0,.25);
+}
+.photo-main-badge{
+  position:absolute;
+  left:4px;
+  bottom:4px;
+  font-size:10px;
+  background:rgba(15,23,42,.78);
+  color:#fff;
+  border-radius:999px;
+  padding:3px 6px;
+}
+
 </style>
 </head>
 <body>
@@ -814,7 +855,12 @@ function editProduct(id){
   EDIT_EXTRA_PHOTOS=[];
   const p=PRODUCTS.find(x=>x.id===id);
   if(!p)return toast("Producto no encontrado","bad");
-  const imgs=(p.images||[]).map(u=>`<img src="${absUrl(u)}">`).join("");
+  const imageItems=(p.image_items&&p.image_items.length)?p.image_items:(p.images||[]).map((u,i)=>({id:null,url:u,position:i}));
+  const imgs=imageItems.map((it,i)=>`<div class="photo-thumb">
+    ${it.id?`<button class="photo-x" onclick="event.stopPropagation();deleteProductImage(${p.id},${it.id})">×</button>`:""}
+    <img src="${absUrl(it.url)}">
+    ${i===0?`<span class="photo-main-badge">Principal</span>`:""}
+  </div>`).join("");
   modal(`<h1>Editar producto</h1>
     <div class="edit-grid">
       <div><label>Nombre</label><input id="epName" value="${safe(p.name||'')}"></div>
@@ -849,6 +895,8 @@ function editProduct(id){
 
     <div class="actions">
       <button class="primary" onclick="saveEditProduct(${id})">Guardar cambios</button>
+      <button class="orange" onclick="deleteAllProductImages(${id})">Borrar fotos</button>
+      <button class="red" onclick="closeModal();deleteProduct(${id})">Borrar producto</button>
       <button class="dark" onclick="closeModal()">Cancelar</button>
     </div>`);
 }
@@ -876,6 +924,30 @@ async function uploadEditProductImages(id){
   if(EDIT_MAIN_PHOTO)fd.append("main_image",EDIT_MAIN_PHOTO);
   EDIT_EXTRA_PHOTOS.forEach(f=>fd.append("images",f));
   return await api(`/api/products/${id}/images`,{method:"POST",body:fd});
+}
+async function deleteProductImage(productId,imageId){
+  confirmBox("Eliminar foto","Se quitará esta foto de referencia del producto.",`doDeleteProductImage(${productId},${imageId})`);
+}
+async function doDeleteProductImage(productId,imageId){
+  showLoad("Eliminando foto...");
+  const r=await api(`/api/products/${productId}/images/${imageId}`,{method:"DELETE"});
+  hideLoad();
+  if(!r.ok){toast(r.error||"No se pudo eliminar la foto","bad");return}
+  toast("Foto eliminada");
+  await loadClient();
+  editProduct(productId);
+}
+async function deleteAllProductImages(productId){
+  confirmBox("Borrar fotos","Se quitarán todas las fotos de referencia de este producto.",`doDeleteAllProductImages(${productId})`);
+}
+async function doDeleteAllProductImages(productId){
+  showLoad("Borrando fotos...");
+  const r=await api(`/api/products/${productId}/images`,{method:"DELETE"});
+  hideLoad();
+  if(!r.ok){toast(r.error||"No se pudieron borrar las fotos","bad");return}
+  toast("Fotos eliminadas");
+  await loadClient();
+  editProduct(productId);
 }
 async function saveEditProduct(id){
   const payload={
@@ -990,7 +1062,7 @@ function renderDetectResult(r){
     }).join("");
     const options=(PRODUCTS||[]).map(p=>`<option value="${p.id}">${safe(productName(p))}</option>`).join("");
     right=`<div class="card"><h2>No hay coincidencia segura</h2>
-      <p class="muted">La foto fue analizada por forma, colores, bordes, etiqueta, marcas y patrones parecidos a letras/códigos.</p>
+      <p class="muted">La foto fue comparada con todas las fotos registradas. Solo se acepta coincidencia si concuerda en color, etiqueta, texto/marca, forma y detalles visuales.</p>
       ${r.match_score!=null?`<div class="detect-score">Mejor parecido: ${r.match_score}</div>`:""}
       ${suggestions?`<h3>Posibles productos</h3><div class="detect-small-list">${suggestions}</div>`:""}
       <label>Entrenar producto existente</label>
