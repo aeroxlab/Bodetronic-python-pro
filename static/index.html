@@ -601,7 +601,16 @@ async function api(path,opts={}){
 }
 function logout(){localStorage.removeItem("BT_TOKEN");localStorage.removeItem("BT_ROLE");localStorage.removeItem("BT_CLIENT");location.reload()}
 function openSupport(){window.open("https://wa.me/51992657332?text="+encodeURIComponent("Necesito soporte para mi sistema"),"_blank")}
-function absUrl(u){if(!u)return "";return String(u).startsWith("/")?location.origin+u:u}
+function absUrl(u){
+  if(!u)return "";
+  let s=String(u);
+  const full=s.startsWith("/")?location.origin+s:s;
+  if(full.includes("/uploads/")){
+    const sep=full.includes("?")?"&":"?";
+    return full+sep+"v="+Date.now();
+  }
+  return full;
+}
 function waNumber(n){let x=String(n||"").replace(/\D/g,""); if(x.length===9)x="51"+x; return x}
 
 function productName(p){
@@ -1062,9 +1071,9 @@ function renderDetectResult(r){
     }).join("");
     const options=(PRODUCTS||[]).map(p=>`<option value="${p.id}">${safe(productName(p))}</option>`).join("");
     right=`<div class="card"><h2>No hay coincidencia segura</h2>
-      <p class="muted">La foto fue comparada con todas las fotos registradas. Solo se acepta coincidencia si concuerda en color, etiqueta, texto/marca, forma y detalles visuales.</p>
+      <p class="muted">No existe coincidencia segura. El sistema solo acepta el mismo producto cuando coinciden etiqueta, color, marca/letras, forma, tamaño visual y foto principal o varias referencias.</p>
       ${r.match_score!=null?`<div class="detect-score">Mejor parecido: ${r.match_score}</div>`:""}
-      ${suggestions?`<h3>Posibles productos</h3><div class="detect-small-list">${suggestions}</div>`:""}
+      ${suggestions?`<h3>Posibles referencias para entrenar</h3><p class="muted">No son coincidencias confirmadas.</p><div class="detect-small-list">${suggestions}</div>`:""}
       <label>Entrenar producto existente</label>
       <select id="trainProductSelect">${options}</select>
       <div class="actions">
