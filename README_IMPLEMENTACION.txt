@@ -46,3 +46,24 @@ CORRECCIÓN EXTRA - CÁMARA / GALERÍA:
   1) Tomar foto: abre cámara.
   2) Subir desde galería: abre archivos/galería y permite varias imágenes.
 - Esto evita que Android abra solo cámara cuando el usuario quiere elegir imágenes.
+
+
+CORRECCIÓN - RECONOCIMIENTO VISUAL Y ENTRENAMIENTO:
+- Se reemplazó la comparación simple por una firma visual mejorada local:
+  promedio, diferencias, bordes y color.
+- Se recalculan firmas antiguas al comparar, sin pedir volver a registrar productos.
+- Si no hay coincidencia segura, se muestran posibles productos y permite entrenar con la foto capturada.
+- En editar producto se puede cambiar foto principal y agregar más fotos de referencia.
+- El scanner/cámara queda más limpio y con menos texto.
+- No se alteró la lógica general de clientes, QR, pagos, sponsor, ventas, créditos ni stock.
+
+
+CORRECCIÓN EXTRA - VISIÓN V3 Y RESULTADO EMERGENTE:
+- La comparación ahora revisa más detalles: forma general, bordes, color, zonas de etiqueta,
+  patrones parecidos a letras/textos, códigos visibles, colores dominantes y partes del producto.
+- Se recalculan firmas antiguas a la nueva firma v3 automáticamente cuando se compara.
+- El resultado de cámara/galería aparece en una pantalla emergente con:
+  foto tomada/cargada, producto encontrado o posibles productos, puntaje visual y botones de acción.
+- Si no hay coincidencia segura, permite entrenar el producto con la foto capturada.
+- Esto sigue siendo reconocimiento local sin API externa. Para leer texto exacto como OCR real
+  o reconocer marcas con IA avanzada se puede conectar luego una API de visión.

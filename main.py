@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.pdfgen import canvas
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
@@ -397,23 +397,258 @@ def save_upload(file: UploadFile, folder: str = "general"):
         shutil.copyfileobj(file.file, f)
     return f"/uploads/{folder}/{name}"
 
-def image_avg_hash(path: str):
-    try:
-        img = Image.open(path).convert("L").resize((8, 8))
-        px = list(img.getdata())
-        avg = sum(px) / len(px)
-        bits = "".join("1" if p > avg else "0" for p in px)
-        return f"{int(bits, 2):016x}"
-    except Exception:
-        return ""
-
-def hash_distance(a: str, b: str):
+def _hex_hamming(a: str, b: str):
     if not a or not b:
         return None
     try:
         return bin(int(a, 16) ^ int(b, 16)).count("1")
     except Exception:
         return None
+
+def _bits_to_hex(bits: str):
+    return f"{int(bits or '0', 2):0{max(1, (len(bits)+3)//4)}x}"
+
+def _open_visual_image(path: str):
+    img = Image.open(path).convert("RGB")
+    img.thumbnail((640, 640))
+    return img
+
+def _avg_hash_from_image(img, size=8):
+    g = ImageOps.autocontrast(img.convert("L")).resize((size, size))
+    px = list(g.getdata())
+    avg = sum(px) / max(1, len(px))
+    return _bits_to_hex("".join("1" if p > avg else "0" for p in px)).zfill(16)
+
+def _diff_hash_from_image(img, size=8):
+    g = ImageOps.autocontrast(img.convert("L")).resize((size + 1, size))
+    px = list(g.getdata())
+    bits = []
+    for y in range(size):
+        row = px[y * (size + 1):(y + 1) * (size + 1)]
+        for x in range(size):
+            bits.append("1" if row[x] > row[x + 1] else "0")
+    return _bits_to_hex("".join(bits)).zfill(16)
+
+def _edge_hash_from_image(img, size=8):
+    g = ImageOps.autocontrast(img.convert("L")).filter(ImageFilter.FIND_EDGES).resize((size, size))
+    px = list(g.getdata())
+    avg = sum(px) / max(1, len(px))
+    return _bits_to_hex("".join("1" if p > avg else "0" for p in px)).zfill(16)
+
+def _color_signature_from_image(img):
+    small = img.resize((64, 64)).convert("RGB")
+    pixels = list(small.getdata())
+    # 24 valores: 8 rangos por canal. Se guarda compacto en hexadecimal.
+    counts = [[0] * 8 for _ in range(3)]
+    for r, g, b in pixels:
+        counts[0][min(7, r // 32)] += 1
+        counts[1][min(7, g // 32)] += 1
+        counts[2][min(7, b // 32)] += 1
+    sig = []
+    total = max(1, len(pixels))
+    for channel in counts:
+        for c in channel:
+            sig.append(format(min(15, round((c / total) * 64)), "x"))
+    return "".join(sig)
+
+def _crop_hash_pack(img, box_name: str):
+    """Hash por zonas para comparar etiqueta, marca, forma y partes del producto."""
+    w, h = img.size
+    boxes = {
+        "center": (int(w*0.18), int(h*0.18), int(w*0.82), int(h*0.82)),
+        "label": (int(w*0.12), int(h*0.35), int(w*0.88), int(h*0.78)),
+        "top": (0, 0, w, int(h*0.45)),
+        "bottom": (0, int(h*0.45), w, h),
+        "left": (0, 0, int(w*0.55), h),
+        "right": (int(w*0.45), 0, w, h),
+    }
+    box = boxes.get(box_name, boxes["center"])
+    crop = img.crop(box)
+    return _avg_hash_from_image(crop) + _diff_hash_from_image(crop) + _edge_hash_from_image(crop)
+
+def _text_like_signature_from_image(img):
+    """Firma de letras/textos sin OCR externo.
+    Detecta patrones de alto contraste, bordes y distribución de trazos.
+    Sirve para comparar marcas, etiquetas, tipografías y códigos visibles,
+    aunque no lee palabras como un OCR real.
+    """
+    g = ImageOps.autocontrast(img.convert("L"))
+    w, h = g.size
+    # Zona donde normalmente está la etiqueta del producto
+    crop = g.crop((int(w*0.08), int(h*0.25), int(w*0.92), int(h*0.86))).resize((96, 64))
+    edge = crop.filter(ImageFilter.FIND_EDGES)
+    px = list(edge.getdata())
+    avg = sum(px) / max(1, len(px))
+    binary = [1 if p > max(28, avg * 1.20) else 0 for p in px]
+
+    # Proyección horizontal y vertical: muy útil para letras, líneas y códigos.
+    rows = []
+    for y in range(64):
+        rows.append(sum(binary[y*96:(y+1)*96]))
+    cols = []
+    for x in range(96):
+        cols.append(sum(binary[y*96+x] for y in range(64)))
+
+    def pack(vals, groups):
+        step = max(1, len(vals)//groups)
+        out = []
+        maxv = max(vals) or 1
+        for i in range(groups):
+            chunk = vals[i*step:(i+1)*step] or [0]
+            v = round((sum(chunk)/len(chunk))/maxv*15)
+            out.append(format(min(15, max(0, v)), "x"))
+        return "".join(out)
+
+    # 16 + 16 + edgehash = letras/códigos/contornos/tipografía
+    return pack(rows, 16) + pack(cols, 16) + _edge_hash_from_image(crop)
+
+def _dominant_color_signature_from_image(img):
+    """Firma compacta de colores dominantes por cuantización."""
+    small = img.resize((48, 48)).convert("RGB")
+    buckets = {}
+    for r, g, b in small.getdata():
+        key = (r//48, g//48, b//48)
+        buckets[key] = buckets.get(key, 0) + 1
+    top = sorted(buckets.items(), key=lambda x: x[1], reverse=True)[:8]
+    return "".join(f"{k[0]:x}{k[1]:x}{k[2]:x}{min(15, round(v/2304*80)):x}" for k, v in top).ljust(32, "0")
+
+def image_avg_hash(path: str):
+    """Firma visual compatible mejorada.
+    v3 compara: forma general, bordes, colores, zonas de etiqueta,
+    patrones parecidos a letras/textos, códigos visibles y colores dominantes.
+    No reemplaza a una IA/OCR externa, pero es más estricta y útil sin pagos.
+    """
+    try:
+        img = _open_visual_image(path)
+        return "v3|" + "|".join([
+            _avg_hash_from_image(img),
+            _diff_hash_from_image(img),
+            _edge_hash_from_image(img),
+            _color_signature_from_image(img),
+            _crop_hash_pack(img, "center"),
+            _crop_hash_pack(img, "label"),
+            _crop_hash_pack(img, "top"),
+            _crop_hash_pack(img, "bottom"),
+            _text_like_signature_from_image(img),
+            _dominant_color_signature_from_image(img)
+        ])
+    except Exception:
+        return ""
+
+def _parse_v2_signature(sig: str):
+    if not sig or not sig.startswith("v2|"):
+        return None
+    parts = sig.split("|")
+    if len(parts) != 5:
+        return None
+    return {"avg": parts[1], "diff": parts[2], "edge": parts[3], "color": parts[4]}
+
+def _parse_v3_signature(sig: str):
+    if not sig or not sig.startswith("v3|"):
+        return None
+    parts = sig.split("|")
+    if len(parts) != 11:
+        return None
+    return {
+        "avg": parts[1], "diff": parts[2], "edge": parts[3], "color": parts[4],
+        "center": parts[5], "label": parts[6], "top": parts[7], "bottom": parts[8],
+        "textlike": parts[9], "dominant": parts[10]
+    }
+
+def _hex_distance_percent(a: str, b: str):
+    if not a or not b:
+        return 100
+    m = min(len(a), len(b))
+    if m <= 0:
+        return 100
+    aa, bb = a[:m], b[:m]
+    d = _hex_hamming(aa, bb)
+    if d is None:
+        return 100
+    return (d / max(1, m * 4)) * 100
+
+def _signature_color_distance(a: str, b: str):
+    try:
+        m = min(len(a), len(b))
+        ca = [int(x, 16) for x in a[:m]]
+        cb = [int(x, 16) for x in b[:m]]
+        return sum(abs(x - y) for x, y in zip(ca, cb)) / max(1, 15 * len(ca)) * 100
+    except Exception:
+        return 100
+
+def visual_distance(a: str, b: str):
+    """Menor puntaje = más parecido.
+    v3 revisa detalles mínimos: forma, bordes, etiqueta, letras/códigos visuales,
+    color, tipografía aproximada y zonas del producto.
+    """
+    if not a or not b:
+        return None
+
+    av3, bv3 = _parse_v3_signature(a), _parse_v3_signature(b)
+    if av3 and bv3:
+        d_avg = _hex_distance_percent(av3["avg"], bv3["avg"])
+        d_diff = _hex_distance_percent(av3["diff"], bv3["diff"])
+        d_edge = _hex_distance_percent(av3["edge"], bv3["edge"])
+        d_color = _signature_color_distance(av3["color"], bv3["color"])
+        d_center = _hex_distance_percent(av3["center"], bv3["center"])
+        d_label = _hex_distance_percent(av3["label"], bv3["label"])
+        d_top = _hex_distance_percent(av3["top"], bv3["top"])
+        d_bottom = _hex_distance_percent(av3["bottom"], bv3["bottom"])
+        d_text = _hex_distance_percent(av3["textlike"], bv3["textlike"])
+        d_dom = _signature_color_distance(av3["dominant"], bv3["dominant"])
+
+        # Pesos afinados para productos: etiqueta/texto + forma + color.
+        score = (
+            d_avg * 0.08 +
+            d_diff * 0.14 +
+            d_edge * 0.11 +
+            d_color * 0.08 +
+            d_center * 0.12 +
+            d_label * 0.19 +
+            d_top * 0.05 +
+            d_bottom * 0.05 +
+            d_text * 0.13 +
+            d_dom * 0.05
+        )
+        return round(score, 2)
+
+    # Compatibilidad con v2.
+    av2, bv2 = _parse_v2_signature(a), _parse_v2_signature(b)
+    if av2 and bv2:
+        d_avg = _hex_distance_percent(av2["avg"], bv2["avg"])
+        d_diff = _hex_distance_percent(av2["diff"], bv2["diff"])
+        d_edge = _hex_distance_percent(av2["edge"], bv2["edge"])
+        d_color = _signature_color_distance(av2["color"], bv2["color"])
+        return round((d_avg * 0.30) + (d_diff * 0.35) + (d_edge * 0.25) + (d_color * 0.10), 2)
+
+    # Compatibilidad con firmas viejas de 16 hex.
+    old = _hex_hamming(a, b)
+    return None if old is None else round((old / 64) * 100, 2)
+
+def hash_distance(a: str, b: str):
+    # Se conserva el nombre usado antes, pero ahora llama al comparador mejorado.
+    return visual_distance(a, b)
+
+def upload_disk_path(upload_url: str):
+    if not upload_url:
+        return None
+    rel = upload_url.replace("/uploads/", "")
+    path = UPLOAD_DIR / rel
+    return path if path.exists() else None
+
+def ensure_visual_signature(obj, upload_url: str):
+    """Recalcula firmas antiguas al detectar, sin pedir al usuario volver a registrar."""
+    current = getattr(obj, "visual_hash", "") or ""
+    if current.startswith("v3|"):
+        return current
+    path = upload_disk_path(upload_url)
+    if not path:
+        return current
+    sig = image_avg_hash(str(path))
+    if sig:
+        obj.visual_hash = sig
+        return sig
+    return current
 
 SERVICE_NAMES = {
     "bodega": "Bodega",
@@ -537,6 +772,8 @@ def product_dict(p: Product):
         "presentation": p.presentation,
         "image_url": p.image_url,
         "images": [img.image_url for img in getattr(p, "images", []) if img.image_url],
+        "image_items": [{"id": img.id, "url": img.image_url, "position": img.position} for img in getattr(p, "images", []) if img.image_url],
+        "image_count": len([img for img in getattr(p, "images", []) if img.image_url]),
         "stock": p.stock,
         "min_stock": p.min_stock,
         "real_price": p.real_price,
@@ -1175,39 +1412,133 @@ def detect_product(client_id: int = Form(...), image: UploadFile = File(...), db
     if user["role"] == "client" and int(user["client_id"]) != client_id:
         raise HTTPException(status_code=403, detail="No autorizado")
     captured_url = save_upload(image, f"client_{client_id}/detections")
-    h = image_avg_hash(str(UPLOAD_DIR / captured_url.replace("/uploads/", "")))
+    captured_path = upload_disk_path(captured_url)
+    h = image_avg_hash(str(captured_path)) if captured_path else ""
 
-    best_product = None
-    best_ref_url = ""
-    best_dist = 999
+    candidates = []
 
     refs = db.query(ProductImage).filter(ProductImage.client_id == client_id).all()
     for ref in refs:
         p = db.query(Product).get(ref.product_id)
         if not p or not p.active:
             continue
-        d = hash_distance(h, ref.visual_hash)
-        if d is not None and d < best_dist:
-            best_product = p
-            best_ref_url = ref.image_url
-            best_dist = d
+        ref_sig = ensure_visual_signature(ref, ref.image_url)
+        d = visual_distance(h, ref_sig)
+        if d is not None:
+            candidates.append((d, p, ref.image_url))
 
-    # Compatibilidad con productos antiguos que solo tenían una imagen principal
-    if best_product is None:
-        for p in db.query(Product).filter(Product.client_id == client_id, Product.active == True).all():
-            d = hash_distance(h, p.visual_hash)
-            if d is not None and d < best_dist:
-                best_product = p
-                best_ref_url = p.image_url
-                best_dist = d
+    # Compatibilidad con productos antiguos que solo tenían una imagen principal.
+    for p in db.query(Product).filter(Product.client_id == client_id, Product.active == True).all():
+        if not p.image_url:
+            continue
+        p_sig = ensure_visual_signature(p, p.image_url)
+        d = visual_distance(h, p_sig)
+        if d is not None:
+            candidates.append((d, p, p.image_url))
 
-    threshold = int(os.getenv("VISUAL_MATCH_DISTANCE", "18"))
-    if best_product and best_dist <= threshold:
+    db.commit()
+
+    # Quitar duplicados por producto quedándonos con su mejor foto.
+    best_by_product = {}
+    for score, p, ref_url in candidates:
+        if p.id not in best_by_product or score < best_by_product[p.id][0]:
+            best_by_product[p.id] = (score, p, ref_url)
+    ranked = sorted(best_by_product.values(), key=lambda x: x[0])
+
+    threshold = float(os.getenv("VISUAL_MATCH_SCORE", "62"))
+    if ranked:
+        best_score, best_product, best_ref_url = ranked[0]
         data = product_dict(best_product)
         data["matched_image_url"] = best_ref_url or best_product.image_url
-        return {"ok": True, "captured_image": captured_url, "match_distance": best_dist, "similar": True, "product": data}
+        suggestions = []
+        for score, sp, sref in ranked[:5]:
+            sd = product_dict(sp)
+            sd["matched_image_url"] = sref or sp.image_url
+            suggestions.append({"score": score, "product": sd})
+        if best_score <= threshold:
+            return {
+                "ok": True,
+                "captured_image": captured_url,
+                "match_score": best_score,
+                "match_distance": best_score,
+                "similar": True,
+                "product": data,
+                "suggestions": suggestions
+            }
+        return {
+            "ok": False,
+            "captured_image": captured_url,
+            "match_score": best_score,
+            "match_distance": best_score,
+            "similar": False,
+            "suggestions": suggestions,
+            "error": "No hay coincidencia segura con productos registrados"
+        }
 
-    return {"ok": False, "captured_image": captured_url, "match_distance": best_dist if best_product else None, "similar": False, "error": "No hay coincidencia con productos registrados"}
+    return {
+        "ok": False,
+        "captured_image": captured_url,
+        "match_score": None,
+        "match_distance": None,
+        "similar": False,
+        "suggestions": [],
+        "error": "No hay fotos de referencia suficientes para comparar"
+    }
+
+@app.post("/api/products/{product_id}/images")
+def upload_product_images(
+    product_id: int,
+    replace_main: bool = Form(False),
+    main_image: UploadFile = File(None),
+    images: List[UploadFile] = File(default=[]),
+    db=Depends(get_db),
+    user=Depends(require_user)
+):
+    p = db.query(Product).get(product_id)
+    if not p:
+        return {"ok": False, "error": "Producto no encontrado"}
+    if user["role"] == "client" and int(user["client_id"]) != p.client_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    added = []
+    if main_image and getattr(main_image, "filename", ""):
+        url = save_upload(main_image, f"client_{p.client_id}/products")
+        sig = image_avg_hash(str(UPLOAD_DIR / url.replace("/uploads/", "")))
+        if replace_main or not p.image_url:
+            p.image_url = url
+            p.visual_hash = sig
+        db.add(ProductImage(product_id=p.id, client_id=p.client_id, image_url=url, visual_hash=sig, position=0))
+        added.append(url)
+
+    for f in (images or []):
+        if f and getattr(f, "filename", ""):
+            url = save_upload(f, f"client_{p.client_id}/products")
+            sig = image_avg_hash(str(UPLOAD_DIR / url.replace("/uploads/", "")))
+            db.add(ProductImage(product_id=p.id, client_id=p.client_id, image_url=url, visual_hash=sig, position=1))
+            added.append(url)
+
+    db.commit()
+    db.refresh(p)
+    return {"ok": True, "added": added, "product": product_dict(p)}
+
+@app.post("/api/products/{product_id}/train-from-captured")
+def train_product_from_captured(product_id: int, payload: dict, db=Depends(get_db), user=Depends(require_user)):
+    p = db.query(Product).get(product_id)
+    if not p:
+        return {"ok": False, "error": "Producto no encontrado"}
+    if user["role"] == "client" and int(user["client_id"]) != p.client_id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    image_url = str(payload.get("image_url") or "")
+    path = upload_disk_path(image_url)
+    if not path:
+        return {"ok": False, "error": "Imagen no encontrada para entrenar"}
+    sig = image_avg_hash(str(path))
+    db.add(ProductImage(product_id=p.id, client_id=p.client_id, image_url=image_url, visual_hash=sig, position=1))
+    if not p.image_url:
+        p.image_url = image_url
+        p.visual_hash = sig
+    db.commit()
+    return {"ok": True, "product": product_dict(p)}
 
 # =====================
 # SALES / POS
