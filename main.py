@@ -164,6 +164,7 @@ class Advertisement(Base):
     height = Column(String(40), default="auto")
     duration_seconds = Column(Integer, default=8)
     entrance_style = Column(String(80), default="fade")
+    fit_mode = Column(String(50), default="cover")
     bg_color = Column(String(40), default="#0F172A")
     text_color = Column(String(40), default="#FFFFFF")
     font_size = Column(Integer, default=16)
@@ -592,6 +593,7 @@ def ensure_sqlite_schema():
                 "height": "VARCHAR(40) DEFAULT 'auto'",
                 "duration_seconds": "INTEGER DEFAULT 8",
                 "entrance_style": "VARCHAR(80) DEFAULT 'fade'",
+                "fit_mode": "VARCHAR(50) DEFAULT 'cover'",
                 "bg_color": "VARCHAR(40) DEFAULT '#0F172A'",
                 "text_color": "VARCHAR(40) DEFAULT '#FFFFFF'",
                 "font_size": "INTEGER DEFAULT 16",
@@ -858,7 +860,7 @@ def admin_list_ads(db=Depends(get_db), user=Depends(require_admin)):
         "media_url": a.media_url, "media_type": a.media_type, "location": a.location,
         "display_mode": a.display_mode, "sponsor_name": a.sponsor_name, "link_url": a.link_url,
         "width": a.width, "height": a.height, "duration_seconds": a.duration_seconds,
-        "entrance_style": a.entrance_style, "bg_color": getattr(a, "bg_color", "#0F172A"),
+        "entrance_style": a.entrance_style, "fit_mode": getattr(a, "fit_mode", "cover"), "bg_color": getattr(a, "bg_color", "#0F172A"),
         "text_color": getattr(a, "text_color", "#FFFFFF"), "font_size": getattr(a, "font_size", 16),
         "speed": getattr(a, "speed", 16), "active": a.active,
         "starts_at": a.starts_at.isoformat() if a.starts_at else "",
@@ -881,6 +883,7 @@ def admin_add_ad(payload: dict, db=Depends(get_db), user=Depends(require_admin))
         height=str(payload.get("height") or "auto"),
         duration_seconds=int(payload.get("duration_seconds") or 8),
         entrance_style=payload.get("entrance_style", "fade"),
+        fit_mode=payload.get("fit_mode", "cover"),
         bg_color=payload.get("bg_color", "#0F172A"),
         text_color=payload.get("text_color", "#FFFFFF"),
         font_size=int(payload.get("font_size") or 16),
@@ -898,7 +901,7 @@ def admin_update_ad(ad_id: int, payload: dict, db=Depends(get_db), user=Depends(
     ad = db.query(Advertisement).get(ad_id)
     if not ad:
         return {"ok": False, "error": "Publicidad no encontrada"}
-    for k in ["title", "text_body", "media_url", "media_type", "location", "display_mode", "sponsor_name", "link_url", "width", "height", "entrance_style", "bg_color", "text_color"]:
+    for k in ["title", "text_body", "media_url", "media_type", "location", "display_mode", "sponsor_name", "link_url", "width", "height", "entrance_style", "fit_mode", "bg_color", "text_color"]:
         if k in payload:
             setattr(ad, k, payload[k] or "")
     for k in ["duration_seconds", "font_size", "speed"]:
@@ -947,6 +950,7 @@ def client_bundle(client_id: Optional[int] = None, db=Depends(get_db), user=Depe
             "media_type": a.media_type, "location": a.location, "display_mode": a.display_mode,
             "sponsor_name": a.sponsor_name, "link_url": a.link_url, "width": a.width, "height": a.height,
             "duration_seconds": a.duration_seconds, "entrance_style": a.entrance_style,
+            "fit_mode": getattr(a, "fit_mode", "cover"),
             "bg_color": getattr(a, "bg_color", "#0F172A"), "text_color": getattr(a, "text_color", "#FFFFFF"),
             "font_size": getattr(a, "font_size", 16), "speed": getattr(a, "speed", 16)
         })
@@ -1102,31 +1106,32 @@ def update_product(product_id: int, payload: dict, db=Depends(get_db), user=Depe
         return {"ok": False, "error": "Producto no encontrado"}
     if user["role"] == "client" and int(user["client_id"]) != p.client_id:
         raise HTTPException(status_code=403, detail="No autorizado")
-    for k in ["name", "brand", "barcode", "reference", "category", "presentation", "real_price", "sale_price", "expiration_date", "notes"]:
+
+    old_stock = float(p.stock or 0)
+
+    for k in ["name", "brand", "barcode", "reference", "category", "presentation", "real_price", "sale_price", "expiration_date", "notes", "service"]:
         if k in payload:
             setattr(p, k, payload[k])
+
+    for k in ["stock", "min_stock"]:
+        if k in payload and payload[k] not in [None, ""]:
+            setattr(p, k, float(payload[k] or 0))
+
     if "active" in payload:
         p.active = bool(payload["active"])
-    db.commit()
-    return {"ok": True, "product": product_dict(p)}
 
+    if "stock" in payload and float(p.stock or 0) != old_stock:
+        db.add(StockMovement(
+            client_id=p.client_id,
+            product_id=p.id,
+            movement_type="AJUSTE_MANUAL",
+            quantity=float(p.stock or 0) - old_stock,
+            old_stock=old_stock,
+            new_stock=float(p.stock or 0),
+            origin="Edición producto",
+            notes="Ajuste directo desde edición de producto"
+        ))
 
-@app.post("/api/products/{product_id}/link-barcode")
-def link_product_barcode(product_id: int, payload: dict, db=Depends(get_db), user=Depends(require_user)):
-    """Vincula o reemplaza el código de barras de un producto ya entrenado.
-    No cambia stock, precios ni lógica general del producto.
-    """
-    p = db.query(Product).get(product_id)
-    if not p:
-        return {"ok": False, "error": "Producto no encontrado"}
-    if user["role"] == "client" and int(user["client_id"]) != p.client_id:
-        raise HTTPException(status_code=403, detail="No autorizado")
-    barcode = re.sub(r"[^0-9A-Za-z\-_.]", "", str(payload.get("barcode") or "")).strip()
-    if not barcode:
-        return {"ok": False, "error": "Código de barras vacío"}
-    p.barcode = barcode
-    if payload.get("reference") and not p.reference:
-        p.reference = str(payload.get("reference"))
     db.commit()
     return {"ok": True, "product": product_dict(p)}
 
@@ -1200,31 +1205,9 @@ def detect_product(client_id: int = Form(...), image: UploadFile = File(...), db
     if best_product and best_dist <= threshold:
         data = product_dict(best_product)
         data["matched_image_url"] = best_ref_url or best_product.image_url
-        return {
-            "ok": True,
-            "captured_image": captured_url,
-            "match_distance": best_dist,
-            "similar": True,
-            "product": data,
-            "field_suggestions": {
-                "product_id": best_product.id,
-                "name": product_display_name(best_product),
-                "barcode": best_product.barcode or "",
-                "internal_code": best_product.internal_code or "",
-                "reference": best_product.reference or "",
-                "sale_price": best_product.sale_price,
-                "stock": best_product.stock,
-            },
-        }
+        return {"ok": True, "captured_image": captured_url, "match_distance": best_dist, "similar": True, "product": data}
 
-    return {
-        "ok": False,
-        "captured_image": captured_url,
-        "match_distance": best_dist if best_product else None,
-        "similar": False,
-        "field_suggestions": {},
-        "error": "No hay coincidencia con productos registrados",
-    }
+    return {"ok": False, "captured_image": captured_url, "match_distance": best_dist if best_product else None, "similar": False, "error": "No hay coincidencia con productos registrados"}
 
 # =====================
 # SALES / POS
@@ -1608,15 +1591,3 @@ def send_reminder(payload: dict, db=Depends(get_db), user=Depends(require_user))
 @app.get("/api/health")
 def health():
     return {"ok": True, "app": APP_NAME, "time": peru_time_text()}
-
-# =====================
-# SPA FALLBACK
-# =====================
-@app.get("/{full_path:path}", response_class=HTMLResponse)
-def spa_fallback(full_path: str):
-    # Evita tapar rutas reales de API/archivos públicos.
-    blocked = ("api/", "uploads/", "static/", "public/")
-    if full_path.startswith(blocked):
-        raise HTTPException(status_code=404, detail="Ruta no encontrada")
-    return FileResponse("static/index.html")
-

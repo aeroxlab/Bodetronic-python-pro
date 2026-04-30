@@ -1,7 +1,16 @@
 services:
   - type: web
-    name: bodetronic-camera-barcode
+    name: bodetronic-python-pro
     env: python
-    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MASTER_USER
+        value: "73221820"
+      - key: MASTER_PASS
+        value: "jdiazg20"
+      - key: SUPPORT_WHATSAPP
+        value: "51992657332"

@@ -1,61 +1,40 @@
-BODETRONIC PYTHON PRO - PROYECTO FINAL CORREGIDO
+BODETRONIC PYTHON PRO - CORRECCIÓN PUNTUAL
 
-Base preparada para subir primero a GitHub y luego a Render.
+Base usada:
+- main.py e index.html cargados por el usuario.
+- No se rehizo la lógica general.
+- Se conservaron clientes, diseño, publicidad/sponsor, QR, pagos, productos, stock, POS y créditos.
 
-Estructura:
-- main.py
-- static/index.html
-- uploads/.gitkeep
-- requirements.txt
-- Procfile
-- render.yaml
-- .env.example
-- .gitignore
+Correcciones aplicadas:
+1) Cámara / galería:
+- Botón Tomar foto.
+- Botón Subir archivo desde galería.
+- Reconocimiento visual contra fotos ya registradas.
+- Si detecta producto, permite editarlo o mover stock.
 
-Correcciones aplicadas sin alterar la lógica general:
-1. Cámara / Scanner:
-   - Tomar foto del producto.
-   - Subir archivo desde galería.
-   - Escanear código de barras con cámara.
-   - Subir imagen del código de barras.
-   - Búsqueda manual por nombre, código interno, referencia o código de barras.
+2) Código de barras:
+- Escanear con cámara usando BarcodeDetector cuando el navegador lo soporte.
+- Subir imagen con código de barras.
+- Escribir código manualmente.
+- Buscar por código, nombre, referencia o código interno.
+- Vincular el código detectado/buscado al producto.
 
-2. Registro de producto:
-   - Tomar foto.
-   - Subir una o más fotos desde galería.
-   - La primera foto queda como foto principal.
-   - Las demás fotos quedan como referencias para entrenar comparación visual.
-   - Campo para código de barras manual.
-   - Opción de leer código de barras con cámara o imagen.
+3) Producto:
+- Botón Editar en cada producto.
+- Permite editar nombre, marca, código de barras, referencia, categoría, presentación, stock, stock mínimo, precio real, precio venta, vencimiento y notas.
+- Si cambia stock por edición, registra movimiento AJUSTE_MANUAL.
 
-3. Vinculación producto + código de barras:
-   - Si el sistema detecta un producto entrenado por imagen y también lee código de barras, permite vincular ese código al producto.
-   - Endpoint agregado: /api/products/{product_id}/link-barcode
-   - No modifica stock, precios, ventas, créditos ni lógica principal.
+4) Publicidad / sponsor:
+- No se fuerza video a pantalla completa.
+- Se agrega encaje de video/imagen: contain, cover o fill.
+- Se agrega ubicación Franja/Banner en footer.
+- Los videos/imágenes se encajan en un espacio tipo banner/franja.
+- Mantiene opciones existentes de ticker, footer, flotante, tarjeta y ubicación.
 
-4. Login / carga inicial:
-   - Se incluye static/index.html para que Render cargue la pantalla principal.
-   - Se agrega fallback para que si se abre una ruta interna como /login o /panel, vuelva a cargar el index sin romper el frontend.
-   - Recuerda que Render Free puede demorar al primer ingreso por cold start.
+5) GitHub / Render:
+- Incluye uploads/.gitkeep para conservar carpeta uploads.
+- Incluye requirements.txt, Procfile, render.yaml, .env.example y .gitignore.
 
-5. GitHub:
-   - Se incluye uploads/.gitkeep para que GitHub conserve la carpeta uploads aunque esté vacía.
-
-Render:
-Build Command:
-pip install -r requirements.txt
-
-Start Command:
-uvicorn main:app --host 0.0.0.0 --port $PORT
-
-Variables recomendadas en Render:
-APP_NAME=Bodetronic
-SECRET_KEY=una_clave_larga_segura
-MASTER_USER=73221820
-MASTER_PASS=jdiazg20
-SUPPORT_WHATSAPP=51992657332
-BASE_URL=https://tu-app.onrender.com
-UPLOAD_DIR=uploads
-
-Nota importante:
-Si usas Render Free sin disco persistente, los archivos subidos a uploads pueden perderse cuando Render reinicie o redepliegue. Para producción se recomienda Render Disk, Cloudinary, Google Drive o S3.
+Nota:
+- BarcodeDetector depende del navegador. En Chrome Android suele funcionar; si no, usar código manual o subir imagen.
+- En Render Free la primera carga puede demorar porque la app duerme.
