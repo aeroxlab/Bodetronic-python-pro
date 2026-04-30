@@ -38,3 +38,11 @@ Correcciones aplicadas:
 Nota:
 - BarcodeDetector depende del navegador. En Chrome Android suele funcionar; si no, usar código manual o subir imagen.
 - En Render Free la primera carga puede demorar porque la app duerme.
+
+
+CORRECCIÓN EXTRA - CÁMARA / GALERÍA:
+- En registro de producto ya no se usa un solo selector con capture.
+- Ahora hay botones separados:
+  1) Tomar foto: abre cámara.
+  2) Subir desde galería: abre archivos/galería y permite varias imágenes.
+- Esto evita que Android abra solo cámara cuando el usuario quiere elegir imágenes.
