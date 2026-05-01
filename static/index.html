@@ -549,6 +549,137 @@
 @keyframes scanBlink{0%,100%{opacity:.25}50%{opacity:1}}
 @media(max-width:760px){.scan-panel-grid{grid-template-columns:1fr}.scanner-sheet{border-radius:28px;padding:14px}.scanner-video-wrap{min-height:240px}.barcode-field{grid-template-columns:1fr}.barcode-field button{width:100%}}
 
+
+/* === V11 Smart Checkout Scanner === */
+.smart-scan-shell{
+  background:radial-gradient(circle at top,#063d18 0%,#03130a 55%,#010805 100%);
+  color:#fff;
+  border:1px solid rgba(34,197,94,.35);
+  box-shadow:0 0 42px rgba(34,197,94,.26), inset 0 0 28px rgba(34,197,94,.08);
+}
+.smart-scan-shell .scanner-head h2{color:#fff}
+.smart-rec-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 14px;
+  border-radius:999px;
+  background:rgba(0,0,0,.62);
+  border:1px solid rgba(34,197,94,.35);
+  color:#e7ffe9;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-size:13px;
+}
+.smart-rec-dot{
+  width:11px;height:11px;border-radius:50%;
+  background:#ef4444;
+  box-shadow:0 0 14px #ef4444;
+  animation:smartBlink 1s infinite;
+}
+@keyframes smartBlink{50%{opacity:.35}}
+.smart-object-label{
+  position:absolute;
+  left:50%;
+  top:11%;
+  transform:translateX(-50%);
+  z-index:6;
+  background:#19ff38;
+  color:#041407;
+  padding:8px 16px;
+  border-radius:8px 8px 2px 2px;
+  font-weight:950;
+  font-size:16px;
+  box-shadow:0 0 24px rgba(25,255,56,.65);
+  max-width:86%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.smart-object-label.searching{background:#22d3ee;color:#03111a;box-shadow:0 0 24px rgba(34,211,238,.55)}
+.smart-object-label.paused{background:#f59e0b;color:#1f1300;box-shadow:0 0 24px rgba(245,158,11,.55)}
+.smart-object-box{
+  position:absolute;
+  left:17%;
+  right:17%;
+  top:21%;
+  bottom:19%;
+  border:4px solid #19ff38;
+  border-radius:18px;
+  z-index:5;
+  box-shadow:0 0 22px rgba(25,255,56,.95), inset 0 0 28px rgba(25,255,56,.18);
+  animation:objectLock 1.2s ease-in-out infinite alternate;
+  pointer-events:none;
+}
+.smart-object-box::before,
+.smart-object-box::after{
+  content:"";
+  position:absolute;
+  inset:-8px;
+  border-radius:22px;
+  border:2px solid rgba(255,255,255,.92);
+  clip-path:polygon(0 0,22% 0,22% 7%,7% 7%,7% 22%,0 22%,0 0,
+                    78% 0,100% 0,100% 22%,93% 22%,93% 7%,78% 7%,
+                    78% 93%,93% 93%,93% 78%,100% 78%,100% 100%,78% 100%,
+                    22% 100%,0 100%,0 78%,7% 78%,7% 93%,22% 93%);
+}
+@keyframes objectLock{
+  from{transform:scale(.985);filter:brightness(1)}
+  to{transform:scale(1.015);filter:brightness(1.25)}
+}
+.smart-grid-floor{
+  position:absolute;
+  left:0;right:0;bottom:0;height:45%;
+  background:
+    linear-gradient(rgba(34,197,94,.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,197,94,.22) 1px, transparent 1px);
+  background-size:42px 42px;
+  transform:perspective(280px) rotateX(56deg);
+  transform-origin:bottom;
+  opacity:.42;
+  pointer-events:none;
+}
+.smart-hud{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.smart-hud-card{
+  background:rgba(0,0,0,.34);
+  border:1px solid rgba(34,197,94,.28);
+  border-radius:18px;
+  padding:12px;
+}
+.smart-hud-card small{
+  display:block;
+  color:rgba(255,255,255,.56);
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.smart-hud-card b{font-size:18px;color:#fff}
+.smart-scan-shell .scan-status{
+  background:rgba(5,46,22,.72);
+  color:#dcfce7;
+  border:1px solid rgba(34,197,94,.38);
+  font-weight:900;
+}
+.smart-scan-shell .actions button{min-height:50px}
+.scan-product-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:12px;
+}
+@media(max-width:760px){
+  .smart-hud{grid-template-columns:1fr}
+  .smart-object-label{font-size:14px;top:9%}
+  .smart-object-box{left:13%;right:13%;top:20%;bottom:17%}
+  .scan-product-actions{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -1023,8 +1154,8 @@ function clientScanner(){
       </div>
       <div class="scan-option">
         <h2>Imagen del producto</h2>
-        <p>Para productos sin código. La cámara queda abierta y detecta coincidencias.</p>
-        <button class="primary full" onclick="startLiveImageCamera()">Buscar con cámara</button>
+        <p>Para productos sin código. Encierra el producto, compara el recuadro y abre popup si coincide.</p>
+        <button class="primary full" onclick="startLiveImageCamera('query')">Buscar con cámara</button>
         <button class="btn full" onclick="el('scanGalleryFile').click()">Subir desde galería</button>
       </div>
     </div>
@@ -1119,30 +1250,232 @@ async function trainCapturedToProduct(productId,imageUrl){
   await loadClient();
 }
 
-let BARCODE_STREAM=null, BARCODE_TIMER=null, LIVE_IMG_STREAM=null, LIVE_IMG_TIMER=null, LIVE_IMG_BUSY=false, LIVE_IMG_LAST=null, LIVE_IMG_REPEAT=0;
+let BARCODE_STREAM=null, BARCODE_TIMER=null, LIVE_IMG_STREAM=null, LIVE_IMG_TIMER=null, LIVE_IMG_BUSY=false, LIVE_IMG_LAST=null, LIVE_IMG_REPEAT=0, LIVE_IMG_PAUSED=false, LIVE_IMG_MODE='query', LIVE_IMG_SCANS=0, LIVE_IMG_LAST_RESULT=null;
+
+function addProductToCartFromScanner(p){
+  if(!p || !p.id)return;
+  const id=Number(p.id);
+  const prod=PRODUCTS.find(x=>Number(x.id)===id)||p;
+  const qty=1;
+  CART.push({product_id:id,product_name:productName(prod),quantity:qty,unit_price:Number(prod.sale_price||0),total:qty*Number(prod.sale_price||0)});
+  renderCart();
+  toast("Producto agregado al carrito");
+}
+function scannerModeActions(p,mode){
+  if(mode==="pos"){
+    return `<button class="primary" onclick="addProductToCartFromScanner(${JSON.stringify(p).replace(/"/g,"&quot;")})">Agregar otra vez</button>
+            <button class="dark" onclick="closeModal();clientPOS()">Ir al carrito</button>`;
+  }
+  return `<button class="primary" onclick="closeModal();editProduct(${p.id})">Editar</button>
+          <button class="orange" onclick="closeModal();stockModal(${p.id})">Stock</button>`;
+}
+function handleProductDetectedForMode(p,subtitle="Producto encontrado",mode="query"){
+  if(!p)return;
+  if(mode==="pos") addProductToCartFromScanner(p);
+  showProductPopup(p,subtitle,mode);
+}
+async function apiTimeout(path,opts={},ms=9000){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),ms);
+  try{
+    opts.signal=ctrl.signal;
+    return await api(path,opts);
+  }finally{
+    clearTimeout(t);
+  }
+}
+
 function playScanBeep(){try{const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();const gain=ctx.createGain();gain.gain.value=0.32;gain.connect(ctx.destination);[0,105].forEach(delay=>{const osc=ctx.createOscillator();osc.type="square";osc.frequency.value=1280;osc.connect(gain);osc.start(ctx.currentTime+delay/1000);osc.stop(ctx.currentTime+delay/1000+0.09)});setTimeout(()=>ctx.close(),480)}catch(e){}}
 function showScannerOverlay(html){closeScannerOverlay(false);const box=document.createElement('div');box.id='scannerOverlay';box.className='scanner-overlay';box.innerHTML=`<div class="scanner-sheet">${html}</div>`;document.body.appendChild(box)}
 function closeScannerOverlay(stop=true){if(stop){stopBarcodeCamera();stopLiveImageCamera(false)}const old=document.getElementById('scannerOverlay');if(old)old.remove()}
 async function startBarcodeCamera(mode='query', targetInputId=''){
-  showScannerOverlay(`<div class="scanner-head"><h2>Escanear código</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div><div class="scanner-video-wrap"><video id="barcodeVideo" playsinline muted></video><div class="scan-frame"></div><div class="scan-line"></div></div><div class="scan-status" id="barcodeStatus">Apunta al código de barras</div><div class="actions"><button class="btn" onclick="manualBarcodePrompt('${mode}','${targetInputId}')">Código manual</button></div>`);
+  showScannerOverlay(`<div class="scanner-head"><h2>Escanear código</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div>
+    <div class="scanner-video-wrap smart-scan-shell">
+      <video id="barcodeVideo" playsinline muted></video>
+      <div class="smart-grid-floor"></div>
+      <div class="smart-rec-pill" style="position:absolute;left:16px;top:16px;z-index:6"><span class="smart-rec-dot"></span> REC</div>
+      <div class="scan-frame"></div><div class="scan-line"></div>
+    </div>
+    <div class="scan-status" id="barcodeStatus">Apunta al código de barras</div>
+    <div class="actions"><button class="btn" onclick="manualBarcodePrompt('${mode}','${targetInputId}')">Código manual</button><button class="dark" onclick="closeScannerOverlay()">Parar escaneo</button></div>`);
   const video=el('barcodeVideo');
   if(!('BarcodeDetector' in window)){el('barcodeStatus').textContent='Tu navegador no soporta lectura automática. Usa manual.';return}
-  try{BARCODE_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=BARCODE_STREAM;await video.play();const detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']});BARCODE_TIMER=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes&&codes.length){const code=String(codes[0].rawValue||'').trim();if(!code)return;playScanBeep();if(el('barcodeStatus'))el('barcodeStatus').textContent='Código detectado: '+code;await handleBarcodeDetected(code,mode,targetInputId)}}catch(e){}},550)}catch(e){if(el('barcodeStatus'))el('barcodeStatus').textContent='No se pudo abrir cámara: '+e.message;toast('No se pudo abrir la cámara','bad')}
+  try{
+    BARCODE_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=BARCODE_STREAM;await video.play();
+    const detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']});
+    BARCODE_TIMER=setInterval(async()=>{
+      try{
+        const codes=await detector.detect(video);
+        if(codes&&codes.length){
+          const code=String(codes[0].rawValue||'').trim();
+          if(!code)return;
+          playScanBeep();
+          if(el('barcodeStatus'))el('barcodeStatus').textContent='Código detectado: '+code;
+          await handleBarcodeDetected(code,mode,targetInputId);
+        }
+      }catch(e){}
+    },420);
+  }catch(e){
+    if(el('barcodeStatus'))el('barcodeStatus').textContent='No se pudo abrir cámara: '+e.message;
+    toast('No se pudo abrir la cámara','bad');
+  }
 }
-async function handleBarcodeDetected(code,mode='query',targetInputId=''){stopBarcodeCamera();closeScannerOverlay(false);if(mode==='fill'&&targetInputId){if(el(targetInputId))el(targetInputId).value=code;toast('Código agregado: '+code);return}if(el('scanQ'))el('scanQ').value=code;const found=await searchProductByCode(code);if(found){showProductPopup(found,'Código detectado: '+code)}else modal(`<h1>No encontrado</h1><p class="muted">Código detectado: <b>${safe(code)}</b></p><p>No existe un producto vinculado a este código.</p><div class="actions"><button class="primary" onclick="closeModal();newProductForm()">Crear producto</button><button class="dark" onclick="closeModal()">Cerrar</button></div>`)}
+async function handleBarcodeDetected(code,mode='query',targetInputId=''){
+  stopBarcodeCamera();
+  closeScannerOverlay(false);
+  if(mode==='fill'&&targetInputId){
+    if(el(targetInputId))el(targetInputId).value=code;
+    toast('Código agregado: '+code);
+    return;
+  }
+  if(el('scanQ'))el('scanQ').value=code;
+  const found=await searchProductByCode(code);
+  if(found){
+    handleProductDetectedForMode(found,'Código detectado: '+code,mode);
+  }else{
+    modal(`<h1>No encontrado</h1><p class="muted">Código detectado: <b>${safe(code)}</b></p><p>No existe un producto vinculado a este código.</p><div class="actions"><button class="primary" onclick="closeModal();newProductForm()">Crear producto</button><button class="dark" onclick="closeModal()">Cerrar</button></div>`);
+  }
+}
 function stopBarcodeCamera(){if(BARCODE_TIMER)clearInterval(BARCODE_TIMER);BARCODE_TIMER=null;if(BARCODE_STREAM){BARCODE_STREAM.getTracks().forEach(t=>t.stop())}BARCODE_STREAM=null}
 async function searchProductByCode(code){const r=await api(`/api/products/search?client_id=${CLIENT.id}&q=${encodeURIComponent(code)}`);const list=r.products||[];return list.find(p=>String(p.barcode||'').trim()===String(code).trim())||list[0]||null}
-function showProductPopup(p,subtitle='Producto encontrado'){playScanBeep();modal(`<h1>${safe(subtitle)}</h1><div class="card">${productFoundHtml(p)}<div class="actions"><button class="primary" onclick="closeModal();editProduct(${p.id})">Editar</button><button class="orange" onclick="closeModal();stockModal(${p.id})">Stock</button><button class="dark" onclick="closeModal()">Cerrar</button></div></div>`)}
+function showProductPopup(p,subtitle='Producto encontrado',mode='query'){
+  playScanBeep();
+  const extra=mode==="pos"?`<p class="pill">Agregado al carrito</p>`:"";
+  modal(`<h1>${safe(subtitle)}</h1>${extra}<div class="card">${productFoundHtml(p)}<div class="actions">${scannerModeActions(p,mode)}<button class="dark" onclick="closeModal()">Cerrar</button></div></div>`)
+}
 async function detectBarcodeFromImage(inputId){const f=el(inputId)?.files?.[0];if(!f)return toast('Selecciona imagen','bad');if(!('BarcodeDetector' in window)){toast('Tu navegador no soporta lectura automática. Escribe el código manualmente.','bad');return}const img=new Image();img.onload=async()=>{try{const detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']});const codes=await detector.detect(img);if(codes&&codes.length){const code=String(codes[0].rawValue||'').trim();playScanBeep();if(el('scanQ'))el('scanQ').value=code;const found=await searchProductByCode(code);if(found)showProductPopup(found,'Código detectado: '+code);else toast('Código detectado, pero no vinculado: '+code,'bad')}else toast('No se detectó código. Prueba otra foto o escríbelo manualmente.','bad')}catch(e){toast('No se pudo leer el código: '+e.message,'bad')}};img.src=URL.createObjectURL(f)}
 function manualBarcodePrompt(mode='query',targetInputId=''){modal(`<h1>Código manual</h1><p class="muted">Escribe o pega el código de barras.</p><input id="manualBarcodeValue" placeholder="Ej: 775..."><div class="actions"><button class="primary" onclick="useManualBarcode('${mode}','${targetInputId}')">Aceptar</button><button class="dark" onclick="closeModal()">Cancelar</button></div>`)}
 async function useManualBarcode(mode='query',targetInputId=''){const code=el('manualBarcodeValue').value.trim();if(!code)return toast('Escribe el código','bad');closeModal();if(mode==='fill'&&targetInputId){if(el(targetInputId))el(targetInputId).value=code;toast('Código agregado');return}if(el('scanQ'))el('scanQ').value=code;await scanSearch()}
 async function linkBarcodeToProduct(productId,barcode){if(!barcode)return toast('Falta código de barras','bad');showLoad('Vinculando código...');const r=await api(`/api/products/${productId}`,{method:'PUT',body:JSON.stringify({barcode})});hideLoad();if(!r.ok){toast(r.error||'No se pudo vincular','bad');return}toast('Código vinculado al producto');await loadClient()}
-async function startLiveImageCamera(){showScannerOverlay(`<div class="scanner-head"><h2>Buscar por imagen</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div><div class="scanner-video-wrap"><video id="liveImageVideo" playsinline muted></video><div class="scan-frame"></div><div class="scan-line"></div></div><div class="scan-status" id="liveImageStatus">Apunta al producto</div><div class="actions"><button class="primary" onclick="captureLiveImageOnce()">Comparar ahora</button><button class="btn" onclick="el('scanGalleryFile')?.click();closeScannerOverlay()">Subir galería</button></div>`);const video=el('liveImageVideo');try{LIVE_IMG_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=LIVE_IMG_STREAM;await video.play();LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;LIVE_IMG_BUSY=false;LIVE_IMG_TIMER=setInterval(()=>captureLiveFrameAndCompare(false),1800)}catch(e){if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo abrir cámara: '+e.message;toast('No se pudo abrir la cámara','bad')}}
-function stopLiveImageCamera(remove=true){if(LIVE_IMG_TIMER)clearInterval(LIVE_IMG_TIMER);LIVE_IMG_TIMER=null;LIVE_IMG_BUSY=false;LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;if(LIVE_IMG_STREAM){LIVE_IMG_STREAM.getTracks().forEach(t=>t.stop())}LIVE_IMG_STREAM=null;if(remove){const old=document.getElementById('scannerOverlay');if(old)old.remove()}}
+function liveScannerHtml(mode='query'){
+  const title=mode==='pos'?'Vender por imagen':'Buscar por imagen';
+  return `<div class="scanner-head"><h2>${title}</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div>
+  <div class="scanner-video-wrap smart-scan-shell">
+    <video id="liveImageVideo" playsinline muted></video>
+    <div class="smart-grid-floor"></div>
+    <div class="smart-rec-pill" style="position:absolute;left:16px;top:16px;z-index:7"><span class="smart-rec-dot"></span> REC</div>
+    <div id="liveSmartLabel" class="smart-object-label searching">Buscando producto...</div>
+    <div id="liveObjectBox" class="smart-object-box"></div>
+    <div class="scan-line"></div>
+  </div>
+  <div class="scan-status" id="liveImageStatus">Apunta el producto dentro del recuadro</div>
+  <div class="smart-hud">
+    <div class="smart-hud-card"><small>Modo</small><b>${mode==='pos'?'Venta / carrito':'Consulta de producto'}</b></div>
+    <div class="smart-hud-card"><small>Validación</small><b id="liveValidationText">Auto-validación activa</b></div>
+  </div>
+  <div class="actions">
+    <button id="livePauseBtn" class="orange" onclick="toggleLiveImageScan()">Pausar escaneo</button>
+    <button class="primary" onclick="captureLiveImageOnce()">Comparar ahora</button>
+    <button class="btn" onclick="el('scanGalleryFile')?.click();closeScannerOverlay()">Subir galería</button>
+    <button class="dark" onclick="closeScannerOverlay()">Parar</button>
+  </div>`;
+}
+async function startLiveImageCamera(mode='query'){
+  LIVE_IMG_MODE=mode;
+  LIVE_IMG_PAUSED=false;
+  LIVE_IMG_SCANS=0;
+  showScannerOverlay(liveScannerHtml(mode));
+  const video=el('liveImageVideo');
+  try{
+    LIVE_IMG_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=LIVE_IMG_STREAM;
+    await video.play();
+    LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;LIVE_IMG_BUSY=false;LIVE_IMG_LAST_RESULT=null;
+    if(el('liveImageStatus'))el('liveImageStatus').textContent='Cámara lista. Centra el producto en el recuadro.';
+    LIVE_IMG_TIMER=setInterval(()=>captureLiveFrameAndCompare(false),1300);
+  }catch(e){
+    if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo abrir cámara: '+e.message;
+    toast('No se pudo abrir la cámara','bad');
+  }
+}
+function toggleLiveImageScan(){
+  LIVE_IMG_PAUSED=!LIVE_IMG_PAUSED;
+  const btn=el('livePauseBtn');
+  const label=el('liveSmartLabel');
+  if(btn)btn.textContent=LIVE_IMG_PAUSED?'Reanudar escaneo':'Pausar escaneo';
+  if(label){
+    label.textContent=LIVE_IMG_PAUSED?'Escaneo pausado':'Buscando producto...';
+    label.className='smart-object-label '+(LIVE_IMG_PAUSED?'paused':'searching');
+  }
+  if(el('liveImageStatus'))el('liveImageStatus').textContent=LIVE_IMG_PAUSED?'Escaneo pausado. Presiona reanudar para continuar.':'Escaneo reanudado.';
+}
+function stopLiveImageCamera(remove=true){
+  if(LIVE_IMG_TIMER)clearInterval(LIVE_IMG_TIMER);
+  LIVE_IMG_TIMER=null;LIVE_IMG_BUSY=false;LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;LIVE_IMG_PAUSED=false;LIVE_IMG_LAST_RESULT=null;
+  if(LIVE_IMG_STREAM){LIVE_IMG_STREAM.getTracks().forEach(t=>t.stop())}
+  LIVE_IMG_STREAM=null;
+  if(remove){const old=document.getElementById('scannerOverlay');if(old)old.remove()}
+}
 async function captureLiveImageOnce(){await captureLiveFrameAndCompare(true)}
-async function captureLiveFrameAndCompare(manual=false){const video=el('liveImageVideo');if(!video||!video.videoWidth||LIVE_IMG_BUSY)return;LIVE_IMG_BUSY=true;try{if(el('liveImageStatus'))el('liveImageStatus').textContent=manual?'Comparando ahora...':'Analizando producto...';const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.82));const fd=new FormData();fd.append('client_id',CLIENT.id);fd.append('image',new File([blob],'frame.jpg',{type:'image/jpeg'}));const r=await api('/api/products/detect',{method:'POST',body:fd});if(r.ok&&r.similar&&r.product){const pid=String(r.product.id);if(pid===LIVE_IMG_LAST)LIVE_IMG_REPEAT++;else{LIVE_IMG_LAST=pid;LIVE_IMG_REPEAT=1}if(el('liveImageStatus'))el('liveImageStatus').textContent=`Coincidencia ${LIVE_IMG_REPEAT}/2: ${productName(r.product)}`;if(manual||LIVE_IMG_REPEAT>=2){playScanBeep();stopLiveImageCamera(false);closeScannerOverlay(false);renderDetectResult(r)}}else{LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;if(el('liveImageStatus'))el('liveImageStatus').textContent='Sin coincidencia segura. Sigue apuntando...'}}catch(e){if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo comparar. Intenta de nuevo.'}finally{LIVE_IMG_BUSY=false}}
+function makeObjectCropFromVideo(video){
+  const vw=video.videoWidth, vh=video.videoHeight;
+  // Recuadro central, similar al marco visual: evita fondo, mesa y mano lo más posible.
+  const sx=Math.floor(vw*0.17), sy=Math.floor(vh*0.20);
+  const sw=Math.floor(vw*0.66), sh=Math.floor(vh*0.60);
+  const canvas=document.createElement('canvas');
+  canvas.width=900;canvas.height=900;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,900,900);
+  ctx.drawImage(video,sx,sy,sw,sh,0,0,900,900);
+  return canvas;
+}
+async function captureLiveFrameAndCompare(manual=false){
+  const video=el('liveImageVideo');
+  if(!video||!video.videoWidth||LIVE_IMG_BUSY||LIVE_IMG_PAUSED)return;
+  LIVE_IMG_BUSY=true;
+  LIVE_IMG_SCANS++;
+  try{
+    const status=el('liveImageStatus'), label=el('liveSmartLabel'), validation=el('liveValidationText');
+    if(status)status.textContent=manual?'Comparando producto enfocado...':`Analizando producto... intento ${LIVE_IMG_SCANS}`;
+    if(label){label.textContent='Analizando producto...';label.className='smart-object-label searching'}
+    if(validation)validation.textContent='Comparando pixeles del recuadro';
 
-function clientPOS(){if(!hasService("bodega_pos")&&!hasService("minimarket_pos")&&!hasService("almacen_pos"))return inactive();setTitle("Punto de venta","Carrito, cálculo y ticket");el("view").innerHTML=`<div class="card"><h1>Punto de venta</h1><div class="grid2"><input id="posQ" placeholder="Buscar producto por nombre/código"><button class="primary" onclick="posSearch()">Buscar</button></div><div id="posResults"></div><h2>Carrito</h2><div id="cart"></div><div class="total-box"><div class="price" id="cartTotal">${money(0)}</div></div><div class="grid2"><input id="saleCustomer" placeholder="Nombre del cliente"><input id="salePhone" placeholder="Celular WhatsApp del cliente"></div><select id="salePay"><option>Efectivo</option><option>Yape</option><option>Plin</option><option>Tarjeta</option></select><button class="primary full" onclick="finishSale()">Pagar y generar ticket</button></div>`;renderCart()}
+    const canvas=makeObjectCropFromVideo(video);
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.86));
+    const fd=new FormData();
+    fd.append('client_id',CLIENT.id);
+    fd.append('image',new File([blob],'producto_recortado.jpg',{type:'image/jpeg'}));
+
+    const r=await apiTimeout('/api/products/detect',{method:'POST',body:fd},8500);
+    LIVE_IMG_LAST_RESULT=r;
+
+    if(r.ok&&r.similar&&r.product){
+      const pid=String(r.product.id);
+      if(pid===LIVE_IMG_LAST)LIVE_IMG_REPEAT++;else{LIVE_IMG_LAST=pid;LIVE_IMG_REPEAT=1}
+      const conf=Number(r.confidence||Math.max(0,100-Number(r.match_score||0))).toFixed(1);
+      if(label){label.textContent=`${productName(r.product)} ${conf}%`;label.className='smart-object-label'}
+      if(status)status.textContent=`Coincidencia ${LIVE_IMG_REPEAT}/2: ${productName(r.product)}`;
+      if(validation)validation.textContent='Producto validado';
+
+      if(manual||LIVE_IMG_REPEAT>=2){
+        playScanBeep();
+        stopLiveImageCamera(false);
+        closeScannerOverlay(false);
+        if(LIVE_IMG_MODE==='pos')handleProductDetectedForMode(r.product,`Producto detectado ${conf}%`, 'pos');
+        else renderDetectResult(r);
+      }
+    }else{
+      LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;
+      if(label){label.textContent='Buscando producto...';label.className='smart-object-label searching'}
+      if(status)status.textContent='Sin coincidencia segura. Sigue apuntando dentro del recuadro.';
+      if(validation)validation.textContent='Sin coincidencia confirmada';
+    }
+  }catch(e){
+    if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo comparar aún. Sigue apuntando o usa Comparar ahora.';
+    if(el('liveSmartLabel')){el('liveSmartLabel').textContent='Reintentando...';el('liveSmartLabel').className='smart-object-label searching'}
+  }finally{
+    LIVE_IMG_BUSY=false;
+  }
+}
+
+function clientPOS(){if(!hasService("bodega_pos")&&!hasService("minimarket_pos")&&!hasService("almacen_pos"))return inactive();setTitle("Punto de venta","Carrito, cálculo y ticket");el("view").innerHTML=`<div class="card"><h1>Punto de venta</h1>
+<div class="scan-product-actions">
+  <button class="primary" onclick="startBarcodeCamera('pos')">Escanear código</button>
+  <button class="dark" onclick="startLiveImageCamera('pos')">Cámara por imagen</button>
+</div>
+<p class="muted">Código de barras es el método principal. Imagen sirve para productos entrenados que no tienen código.</p>
+<div class="grid2"><input id="posQ" placeholder="Buscar producto por nombre/código"><button class="primary" onclick="posSearch()">Buscar</button></div><div id="posResults"></div><h2>Carrito</h2><div id="cart"></div><div class="total-box"><div class="price" id="cartTotal">${money(0)}</div></div><div class="grid2"><input id="saleCustomer" placeholder="Nombre del cliente"><input id="salePhone" placeholder="Celular WhatsApp del cliente"></div><select id="salePay"><option>Efectivo</option><option>Yape</option><option>Plin</option><option>Tarjeta</option></select><button class="primary full" onclick="finishSale()">Pagar y generar ticket</button></div>`;renderCart()}
 async function posSearch(){const r=await api(`/api/products/search?client_id=${CLIENT.id}&q=${encodeURIComponent(el("posQ").value)}`);el("posResults").innerHTML=(r.products||[]).map(p=>`<div class="list-card"><b>${safe(productName(p))}</b><div class="price">${money(p.sale_price)}</div><p>Stock: ${p.stock}</p><input id="qty_${p.id}" type="number" value="1"><button class="primary" onclick="addCart(${p.id})">Agregar al carrito</button></div>`).join("")||"No encontrado"}
 function addCart(id){const p=PRODUCTS.find(x=>x.id===id);const qty=Number(el("qty_"+id)?.value||1);CART.push({product_id:id,product_name:productName(p),quantity:qty,unit_price:p.sale_price,total:qty*p.sale_price});renderCart();toast("Agregado")}
 function renderCart(){if(!el("cart"))return;el("cart").innerHTML=CART.map((i,idx)=>`<div class="list-card">${safe(i.product_name)} x ${i.quantity} = <b>${money(i.total)}</b> <button class="red small" onclick="CART.splice(${idx},1);renderCart()">Quitar</button></div>`).join("")||"<p>Carrito vacío.</p>";el("cartTotal").textContent=money(CART.reduce((a,b)=>a+b.total,0))}
@@ -1168,7 +1501,7 @@ async function doDeleteCreditCustomer(id){
 function creditAddForm(){const opts=PRODUCTS.map(p=>`<option value="${p.id}">${safe(productName(p))} - ${money(p.sale_price)}</option>`).join("");modal(`<h1>Agregar fiado</h1><label>Producto registrado</label><select id="crProd" onchange="fillCreditPrice()"><option value="">Manual</option>${opts}</select><label>Producto manual</label><input id="crName"><label>Cantidad</label><input id="crQty" type="number" value="1" oninput="calcCreditLine()"><label>Precio unitario</label><input id="crUnit" type="number" value="0" oninput="calcCreditLine()"><div class="price" id="crLine">S/ 0.00</div><button class="primary" onclick="saveCreditItem()">Agregar</button><button class="dark" onclick="openCredit(${CURRENT_CREDIT.customer.id})">Volver</button>`)}
 function fillCreditPrice(){const p=PRODUCTS.find(x=>x.id==el("crProd").value);if(p){el("crName").value=productName(p);el("crUnit").value=p.sale_price}calcCreditLine()}
 function calcCreditLine(){el("crLine").textContent=money(Number(el("crQty").value||0)*Number(el("crUnit").value||0))}
-async function saveCreditItem(){showLoad("Agregando fiado...");const product_id=el("crProd").value||null;const r=await api("/api/credits/items",{method:"POST",body:JSON.stringify({credit_customer_id:CURRENT_CREDIT.customer.id,product_id,product_name:el("crName").value,quantity:el("crQty").value,unit_price:el("crUnit").value})});hideLoad();if(!r.ok){toast(r.error||"Error","bad");return}await loadClient();openCredit(CURRENT_CREDIT.customer.id)}
+async function saveCreditItem(){showLoad("Agregando fiado...");const product_id=el("crProd").value||null;const r=await api("/api/credits/items",{method:"POST",body:JSON.stringify({credit_customer_id:CURRENT_CREDIT.customer.id,product_id,product_name:el("crName").value,quantity:el("crQty").value,unit_price:el("crUnit").value})});hideLoad();if(!r.ok){toast(r.error||"Error","bad");return}if(r.stock_discounted){toast("Fiado agregado y stock descontado")}else{toast("Fiado agregado")}await loadClient();openCredit(CURRENT_CREDIT.customer.id)}
 function sendCreditWA(){const c=CURRENT_CREDIT.customer;const txt=`Detalle de deuda ${c.name}: Total ${money(c.total_current)}. Link: ${absUrl(c.public_url)}`;window.open(`https://wa.me/51${String(c.whatsapp).replace(/\D/g,'')}?text=${encodeURIComponent(txt)}`,"_blank")}
 async function payCredit(id){confirmBox("Marcar como pagado","Esta acción cerrará la deuda actual y guardará historial.",`doPayCredit(${id})`)}
 async function doPayCredit(id){showLoad("Cerrando deuda...");const r=await api(`/api/credits/${id}/pay`,{method:"POST"});hideLoad();toast("Cuenta pagada");modal(`<h1>Cuenta pagada</h1><div class="price">${money(r.total)}</div><a href="${r.paid_url}" target="_blank"><button class="dark">Ver comprobante pagado</button></a><a href="${r.paid_pdf_url}" target="_blank"><button class="primary">Descargar PDF pagado</button></a><button class="primary" onclick="closeModal();clientCredits()">Cerrar</button>`)}
