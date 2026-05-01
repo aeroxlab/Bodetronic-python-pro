@@ -528,6 +528,27 @@
   padding:3px 6px;
 }
 
+
+/* ===== V8 Scanner en vivo: cámara, código y pitido ===== */
+.scan-panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.scan-option{border:1px solid var(--line);border-radius:28px;padding:18px;background:#fff;box-shadow:0 16px 35px rgba(15,23,42,.06)}
+.scan-option h2{margin:0 0 8px;font-size:clamp(26px,5vw,42px)}
+.scan-option p{margin:0 0 14px;color:#6b7280}
+.scanner-overlay{position:fixed;inset:0;background:rgba(15,23,42,.74);backdrop-filter:blur(8px);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px}
+.scanner-sheet{width:min(760px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:34px;padding:18px;box-shadow:0 30px 90px rgba(0,0,0,.35);border:1px solid rgba(0,166,166,.22)}
+.scanner-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.scanner-head h2{margin:0;font-size:clamp(22px,5vw,38px)}
+.scanner-video-wrap{position:relative;border-radius:26px;overflow:hidden;background:#020617;min-height:280px;border:2px solid rgba(0,166,166,.35);box-shadow:0 0 0 6px rgba(0,166,166,.06), inset 0 0 60px rgba(0,166,166,.18)}
+.scanner-video-wrap video{width:100%;height:min(62vh,520px);object-fit:cover;display:block}
+.scan-frame{position:absolute;inset:12%;border:3px solid rgba(34,211,238,.92);border-radius:24px;box-shadow:0 0 24px rgba(34,211,238,.85), inset 0 0 24px rgba(34,211,238,.32);pointer-events:none;animation:scanPulse 1.4s infinite}
+.scan-line{position:absolute;left:12%;right:12%;height:3px;top:16%;background:linear-gradient(90deg,transparent,#22d3ee,transparent);box-shadow:0 0 18px #22d3ee;animation:scanLine 1.55s linear infinite;pointer-events:none}
+.scan-status{font-weight:900;color:#0f766e;background:#ecfeff;border-radius:999px;padding:10px 14px;margin:12px 0;display:inline-flex;align-items:center;gap:8px}
+.scan-status::before{content:'●';animation:scanBlink 1s infinite;color:#10b981}.barcode-field{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}.barcode-field button{white-space:nowrap}
+@keyframes scanPulse{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.015)}}
+@keyframes scanLine{0%{top:14%}100%{top:84%}}
+@keyframes scanBlink{0%,100%{opacity:.25}50%{opacity:1}}
+@media(max-width:760px){.scan-panel-grid{grid-template-columns:1fr}.scanner-sheet{border-radius:28px;padding:14px}.scanner-video-wrap{min-height:240px}.barcode-field{grid-template-columns:1fr}.barcode-field button{width:100%}}
+
 </style>
 </head>
 <body>
@@ -852,7 +873,7 @@ function clientHome(){const d=BUNDLE.design||{};setTitle(CLIENT.business_name,(C
 async function clientProducts(){if(!hasService("bodega")&&!hasService("minimarket")&&!hasService("almacen"))return inactive();setTitle("Productos","Registro, imagen y stock");await loadClient();el("view").innerHTML=`<div class="card"><h1>Productos</h1><div class="actions"><button class="primary" onclick="newProductForm()">Agregar producto</button><button class="btn" onclick="clientProducts()">Actualizar</button></div>${PRODUCTS.map(productCard).join("")||"<p>No hay productos.</p>"}</div>`}
 function productCard(p){return `<div class="product"><div class="pimg">${p.image_url?`<img src="${absUrl(p.image_url)}">`:"IMG"}</div><div><h2>${safe(productName(p))}</h2><p class="muted">${safe(p.brand)} | ${safe(p.internal_code)} | ${safe(p.barcode||"Sin barras")}</p><div class="price">${money(p.sale_price)}</div><p>Precio real: ${money(p.real_price)} | Stock: <b>${p.stock}</b></p><div class="actions"><button class="btn" onclick="viewProduct(${p.id})">Ver</button><button class="primary" onclick="editProduct(${p.id})">Editar</button><button class="orange" onclick="stockModal(${p.id})">Stock</button><button class="red" onclick="deleteProduct(${p.id})">Borrar</button></div></div></div>`}
 let PRODUCT_PHOTOS=[];
-function newProductForm(){PRODUCT_PHOTOS=[];modal(`<h1>Agregar producto</h1><label>Nombre</label><input id="pn"><label>Marca</label><input id="pb"><label>Código de barras</label><input id="pbar"><label>Referencia</label><input id="pref"><div class="grid2"><div><label>Categoría</label><input id="pcat"></div><div><label>Presentación</label><input id="ppres"></div></div><label>Fecha de vencimiento</label><input id="pexp" type="date"><div class="grid2"><div><label>Stock</label><input id="pst" type="number"></div><div><label>Precio real</label><input id="preal" type="number"></div></div><label>Precio venta</label><input id="psale" type="number"><label>Fotos de referencia del producto</label><div class="photo-box"><p class="muted">Puedes tomar foto con la cámara o subir imágenes desde galería. La primera queda como principal y las demás ayudan a comparar con cámara.</p><input id="pimgCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handleProductPhotos(this.files)"><input id="pimgGallery" class="hide" type="file" accept="image/*" multiple onchange="handleProductPhotos(this.files)"><div class="scanner-actions"><button class="primary" onclick="el('pimgCamera').click()">Tomar foto</button><button class="dark" onclick="el('pimgGallery').click()">Subir desde galería</button></div><div class="actions"><button class="btn" onclick="el('pimgCamera').click()">Tomar otra foto</button><button class="btn" onclick="el('pimgGallery').click()">Subir otra desde galería</button></div><div id="photoCount" class="pill">0 fotos cargadas</div><div id="photoList" class="photo-list"></div></div><div class="actions"><button class="primary" onclick="saveProduct()">Guardar</button><button class="dark" onclick="closeModal()">Cerrar</button></div>`)}
+function newProductForm(){PRODUCT_PHOTOS=[];modal(`<h1>Agregar producto</h1><label>Nombre</label><input id="pn"><label>Marca</label><input id="pb"><label>Código de barras</label><div class="barcode-field"><input id="pbar" placeholder="Manual o escanear"><button class="btn" onclick="startBarcodeCamera('fill','pbar')">Escanear</button></div><label>Referencia</label><input id="pref"><div class="grid2"><div><label>Categoría</label><input id="pcat"></div><div><label>Presentación</label><input id="ppres"></div></div><label>Fecha de vencimiento</label><input id="pexp" type="date"><div class="grid2"><div><label>Stock</label><input id="pst" type="number"></div><div><label>Precio real</label><input id="preal" type="number"></div></div><label>Precio venta</label><input id="psale" type="number"><label>Fotos de referencia del producto</label><div class="photo-box"><p class="muted">Puedes tomar foto con la cámara o subir imágenes desde galería. La primera queda como principal y las demás ayudan a comparar con cámara.</p><input id="pimgCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handleProductPhotos(this.files)"><input id="pimgGallery" class="hide" type="file" accept="image/*" multiple onchange="handleProductPhotos(this.files)"><div class="scanner-actions"><button class="primary" onclick="el('pimgCamera').click()">Tomar foto</button><button class="dark" onclick="el('pimgGallery').click()">Subir desde galería</button></div><div class="actions"><button class="btn" onclick="el('pimgCamera').click()">Tomar otra foto</button><button class="btn" onclick="el('pimgGallery').click()">Subir otra desde galería</button></div><div id="photoCount" class="pill">0 fotos cargadas</div><div id="photoList" class="photo-list"></div></div><div class="actions"><button class="primary" onclick="saveProduct()">Guardar</button><button class="dark" onclick="closeModal()">Cerrar</button></div>`)}
 function handleProductPhotos(files){Array.from(files||[]).forEach(f=>PRODUCT_PHOTOS.push(f));renderProductPhotoList();['pimgCamera','pimgGallery','pimg'].forEach(id=>{if(el(id))el(id).value=''})}
 function renderProductPhotoList(){const count=PRODUCT_PHOTOS.length;el('photoCount').textContent=count+` foto${count===1?'':'s'} cargada${count===1?'':'s'}`;el('photoList').innerHTML=PRODUCT_PHOTOS.map((f,i)=>`<div class="photo-item"><img src="${URL.createObjectURL(f)}"><b>${i===0?'Principal':'Referencia '+(i+1)}</b><button class="red small" onclick="PRODUCT_PHOTOS.splice(${i},1);renderProductPhotoList()">Quitar</button></div>`).join('')}
 async function saveProduct(){let fd=new FormData();fd.append("client_id",CLIENT.id);fd.append("name",el("pn").value);fd.append("brand",el("pb").value);fd.append("barcode",el("pbar").value);fd.append("reference",el("pref").value);fd.append("category",el("pcat")?.value||"");fd.append("presentation",el("ppres")?.value||"");fd.append("expiration_date",el("pexp")?.value||"");fd.append("stock",el("pst").value||0);fd.append("real_price",el("preal").value||0);fd.append("sale_price",el("psale").value||0);PRODUCT_PHOTOS.forEach((f,i)=>{if(i===0)fd.append("image",f);else fd.append("images",f)});showLoad("Guardando producto...");const r=await api("/api/products",{method:"POST",body:fd});hideLoad();if(!r.ok){toast(r.error||"Error","bad");return}closeModal();toast("Producto guardado con "+PRODUCT_PHOTOS.length+" foto(s)");PRODUCT_PHOTOS=[];await loadClient();clientProducts()}
@@ -874,7 +895,7 @@ function editProduct(id){
     <div class="edit-grid">
       <div><label>Nombre</label><input id="epName" value="${safe(p.name||'')}"></div>
       <div><label>Marca</label><input id="epBrand" value="${safe(p.brand||'')}"></div>
-      <div><label>Código de barras</label><input id="epBarcode" value="${safe(p.barcode||'')}"></div>
+      <div><label>Código de barras</label><div class="barcode-field"><input id="epBarcode" value="${safe(p.barcode||'')}" placeholder="Manual o escanear"><button class="btn" onclick="startBarcodeCamera('fill','epBarcode')">Escanear</button></div></div>
       <div><label>Referencia</label><input id="epReference" value="${safe(p.reference||'')}"></div>
       <div><label>Categoría</label><input id="epCategory" value="${safe(p.category||'')}"></div>
       <div><label>Presentación</label><input id="epPresentation" value="${safe(p.presentation||'')}"></div>
@@ -990,34 +1011,29 @@ async function adjustStock(id,type){showLoad("Actualizando stock...");const r=aw
 async function deleteProduct(id){confirmBox("Borrar producto","El producto quedará inactivo.",`doDeleteProduct(${id})`)}
 async function doDeleteProduct(id){showLoad("Borrando...");await api(`/api/products/${id}`,{method:"PUT",body:JSON.stringify({active:false})});hideLoad();await loadClient();clientProducts()}
 function clientScanner(){
-  setTitle("Scanner / Cámara","Busca productos por foto, galería, código o nombre");
+  setTitle("Scanner / Cámara","Consulta como minimarket: código de barras, imagen o manual");
   el("view").innerHTML=`<div class="card">
-    <h1>Scanner / Cámara</h1>
-
-    <h2>Buscar por foto</h2>
-    <div class="scanner-actions">
-      <button class="primary" onclick="el('scanCameraFile').click()">Tomar foto</button>
-      <button class="dark" onclick="el('scanGalleryFile').click()">Subir desde galería</button>
+    <h1>Buscar producto</h1>
+    <div class="scan-panel-grid">
+      <div class="scan-option">
+        <h2>Código de barras</h2>
+        <p>Abre la cámara, apunta el código y el producto aparece automáticamente.</p>
+        <button class="primary full" onclick="startBarcodeCamera('query')">Escanear con cámara</button>
+        <button class="btn full" onclick="el('barcodeImageFile').click()">Subir imagen con código</button>
+      </div>
+      <div class="scan-option">
+        <h2>Imagen del producto</h2>
+        <p>Para productos sin código. La cámara queda abierta y detecta coincidencias.</p>
+        <button class="primary full" onclick="startLiveImageCamera()">Buscar con cámara</button>
+        <button class="btn full" onclick="el('scanGalleryFile').click()">Subir desde galería</button>
+      </div>
     </div>
-    <input id="scanCameraFile" class="hide" type="file" accept="image/*" capture="environment" onchange="detectImageInput('scanCameraFile')">
     <input id="scanGalleryFile" class="hide" type="file" accept="image/*" onchange="detectImageInput('scanGalleryFile')">
-
-    <h2>Código de barras</h2>
-    <div class="scanner-actions">
-      <button class="primary" onclick="startBarcodeCamera()">Escanear</button>
-      <button class="dark" onclick="el('barcodeImageFile').click()">Subir imagen</button>
-      <button class="btn" onclick="manualBarcodePrompt()">Manual</button>
-    </div>
     <input id="barcodeImageFile" class="hide" type="file" accept="image/*" onchange="detectBarcodeFromImage('barcodeImageFile')">
-    <div id="barcodeCamBox" class="camera-box hide">
-      <video id="barcodeVideo" playsinline muted></video>
-      <div class="actions"><button class="red" onclick="stopBarcodeCamera()">Cerrar cámara</button></div>
-    </div>
-
     <hr>
     <label>Búsqueda manual</label>
-    <input id="scanQ" placeholder="Nombre, código interno o barras">
-    <button class="primary" onclick="scanSearch()">Buscar</button>
+    <input id="scanQ" placeholder="Nombre, código interno o código de barras">
+    <button class="dark full" onclick="scanSearch()">Buscar manual</button>
     <div id="scanResult"></div>
   </div>`;
 }
@@ -1071,7 +1087,7 @@ function renderDetectResult(r){
     }).join("");
     const options=(PRODUCTS||[]).map(p=>`<option value="${p.id}">${safe(productName(p))}</option>`).join("");
     right=`<div class="card"><h2>No hay coincidencia segura</h2>
-      <p class="muted">No existe coincidencia segura. El sistema solo acepta el mismo producto cuando coinciden etiqueta, color, marca/letras, forma, tamaño visual y foto principal o varias referencias.</p>
+      <p class="muted">No existe coincidencia segura. Solo se confirma si coincide etiqueta, color, marca/letras y referencias del mismo producto.</p>
       ${r.match_score!=null?`<div class="detect-score">Mejor parecido: ${r.match_score}</div>`:""}
       ${suggestions?`<h3>Posibles referencias para entrenar</h3><p class="muted">No son coincidencias confirmadas.</p><div class="detect-small-list">${suggestions}</div>`:""}
       <label>Entrenar producto existente</label>
@@ -1103,88 +1119,29 @@ async function trainCapturedToProduct(productId,imageUrl){
   await loadClient();
 }
 
-let BARCODE_STREAM=null, BARCODE_TIMER=null;
-async function startBarcodeCamera(){
-  const box=el("barcodeCamBox"), video=el("barcodeVideo");
-  if(!("BarcodeDetector" in window)){
-    box.classList.remove("hide");
-    box.insertAdjacentHTML("beforeend","<p class='muted'>Tu navegador no soporta lectura automática de código de barras. Usa código manual o sube una imagen.</p>");
-    return;
-  }
-  try{
-    BARCODE_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject=BARCODE_STREAM;
-    await video.play();
-    box.classList.remove("hide");
-    const detector=new BarcodeDetector({formats:["ean_13","ean_8","code_128","code_39","upc_a","upc_e","qr_code"]});
-    BARCODE_TIMER=setInterval(async()=>{
-      try{
-        const codes=await detector.detect(video);
-        if(codes&&codes.length){
-          const code=codes[0].rawValue;
-          stopBarcodeCamera();
-          el("scanQ").value=code;
-          await scanSearch();
-          toast("Código detectado: "+code);
-        }
-      }catch(e){}
-    },800);
-  }catch(e){toast("No se pudo abrir la cámara: "+e.message,"bad")}
+let BARCODE_STREAM=null, BARCODE_TIMER=null, LIVE_IMG_STREAM=null, LIVE_IMG_TIMER=null, LIVE_IMG_BUSY=false, LIVE_IMG_LAST=null, LIVE_IMG_REPEAT=0;
+function playScanBeep(){try{const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();const gain=ctx.createGain();gain.gain.value=0.32;gain.connect(ctx.destination);[0,105].forEach(delay=>{const osc=ctx.createOscillator();osc.type="square";osc.frequency.value=1280;osc.connect(gain);osc.start(ctx.currentTime+delay/1000);osc.stop(ctx.currentTime+delay/1000+0.09)});setTimeout(()=>ctx.close(),480)}catch(e){}}
+function showScannerOverlay(html){closeScannerOverlay(false);const box=document.createElement('div');box.id='scannerOverlay';box.className='scanner-overlay';box.innerHTML=`<div class="scanner-sheet">${html}</div>`;document.body.appendChild(box)}
+function closeScannerOverlay(stop=true){if(stop){stopBarcodeCamera();stopLiveImageCamera(false)}const old=document.getElementById('scannerOverlay');if(old)old.remove()}
+async function startBarcodeCamera(mode='query', targetInputId=''){
+  showScannerOverlay(`<div class="scanner-head"><h2>Escanear código</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div><div class="scanner-video-wrap"><video id="barcodeVideo" playsinline muted></video><div class="scan-frame"></div><div class="scan-line"></div></div><div class="scan-status" id="barcodeStatus">Apunta al código de barras</div><div class="actions"><button class="btn" onclick="manualBarcodePrompt('${mode}','${targetInputId}')">Código manual</button></div>`);
+  const video=el('barcodeVideo');
+  if(!('BarcodeDetector' in window)){el('barcodeStatus').textContent='Tu navegador no soporta lectura automática. Usa manual.';return}
+  try{BARCODE_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=BARCODE_STREAM;await video.play();const detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']});BARCODE_TIMER=setInterval(async()=>{try{const codes=await detector.detect(video);if(codes&&codes.length){const code=String(codes[0].rawValue||'').trim();if(!code)return;playScanBeep();if(el('barcodeStatus'))el('barcodeStatus').textContent='Código detectado: '+code;await handleBarcodeDetected(code,mode,targetInputId)}}catch(e){}},550)}catch(e){if(el('barcodeStatus'))el('barcodeStatus').textContent='No se pudo abrir cámara: '+e.message;toast('No se pudo abrir la cámara','bad')}
 }
-function stopBarcodeCamera(){
-  if(BARCODE_TIMER)clearInterval(BARCODE_TIMER);
-  BARCODE_TIMER=null;
-  if(BARCODE_STREAM){BARCODE_STREAM.getTracks().forEach(t=>t.stop())}
-  BARCODE_STREAM=null;
-  el("barcodeCamBox")?.classList.add("hide");
-}
-async function detectBarcodeFromImage(inputId){
-  const f=el(inputId)?.files?.[0];
-  if(!f)return toast("Selecciona imagen","bad");
-  if(!("BarcodeDetector" in window)){
-    toast("Tu navegador no soporta lectura automática. Escribe el código manualmente.","bad");
-    return;
-  }
-  const img=new Image();
-  img.onload=async()=>{
-    try{
-      const detector=new BarcodeDetector({formats:["ean_13","ean_8","code_128","code_39","upc_a","upc_e","qr_code"]});
-      const codes=await detector.detect(img);
-      if(codes&&codes.length){
-        const code=codes[0].rawValue;
-        el("scanQ").value=code;
-        await scanSearch();
-        toast("Código detectado: "+code);
-      }else toast("No se detectó código. Prueba otra foto o escríbelo manualmente.","bad");
-    }catch(e){toast("No se pudo leer el código: "+e.message,"bad")}
-  };
-  img.src=URL.createObjectURL(f);
-}
-function manualBarcodePrompt(){
-  modal(`<h1>Código de barras manual</h1>
-    <p class="muted">Escribe o pega el código de barras del producto.</p>
-    <input id="manualBarcodeValue" placeholder="Ej: 775...">
-    <div class="actions">
-      <button class="primary" onclick="useManualBarcode()">Buscar</button>
-      <button class="dark" onclick="closeModal()">Cancelar</button>
-    </div>`);
-}
-async function useManualBarcode(){
-  const code=el("manualBarcodeValue").value.trim();
-  if(!code)return toast("Escribe el código","bad");
-  closeModal();
-  el("scanQ").value=code;
-  await scanSearch();
-}
-async function linkBarcodeToProduct(productId,barcode){
-  if(!barcode)return toast("Falta código de barras","bad");
-  showLoad("Vinculando código...");
-  const r=await api(`/api/products/${productId}`,{method:"PUT",body:JSON.stringify({barcode})});
-  hideLoad();
-  if(!r.ok){toast(r.error||"No se pudo vincular","bad");return}
-  toast("Código vinculado al producto");
-  await loadClient();
-}
+async function handleBarcodeDetected(code,mode='query',targetInputId=''){stopBarcodeCamera();closeScannerOverlay(false);if(mode==='fill'&&targetInputId){if(el(targetInputId))el(targetInputId).value=code;toast('Código agregado: '+code);return}if(el('scanQ'))el('scanQ').value=code;const found=await searchProductByCode(code);if(found){showProductPopup(found,'Código detectado: '+code)}else modal(`<h1>No encontrado</h1><p class="muted">Código detectado: <b>${safe(code)}</b></p><p>No existe un producto vinculado a este código.</p><div class="actions"><button class="primary" onclick="closeModal();newProductForm()">Crear producto</button><button class="dark" onclick="closeModal()">Cerrar</button></div>`)}
+function stopBarcodeCamera(){if(BARCODE_TIMER)clearInterval(BARCODE_TIMER);BARCODE_TIMER=null;if(BARCODE_STREAM){BARCODE_STREAM.getTracks().forEach(t=>t.stop())}BARCODE_STREAM=null}
+async function searchProductByCode(code){const r=await api(`/api/products/search?client_id=${CLIENT.id}&q=${encodeURIComponent(code)}`);const list=r.products||[];return list.find(p=>String(p.barcode||'').trim()===String(code).trim())||list[0]||null}
+function showProductPopup(p,subtitle='Producto encontrado'){playScanBeep();modal(`<h1>${safe(subtitle)}</h1><div class="card">${productFoundHtml(p)}<div class="actions"><button class="primary" onclick="closeModal();editProduct(${p.id})">Editar</button><button class="orange" onclick="closeModal();stockModal(${p.id})">Stock</button><button class="dark" onclick="closeModal()">Cerrar</button></div></div>`)}
+async function detectBarcodeFromImage(inputId){const f=el(inputId)?.files?.[0];if(!f)return toast('Selecciona imagen','bad');if(!('BarcodeDetector' in window)){toast('Tu navegador no soporta lectura automática. Escribe el código manualmente.','bad');return}const img=new Image();img.onload=async()=>{try{const detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']});const codes=await detector.detect(img);if(codes&&codes.length){const code=String(codes[0].rawValue||'').trim();playScanBeep();if(el('scanQ'))el('scanQ').value=code;const found=await searchProductByCode(code);if(found)showProductPopup(found,'Código detectado: '+code);else toast('Código detectado, pero no vinculado: '+code,'bad')}else toast('No se detectó código. Prueba otra foto o escríbelo manualmente.','bad')}catch(e){toast('No se pudo leer el código: '+e.message,'bad')}};img.src=URL.createObjectURL(f)}
+function manualBarcodePrompt(mode='query',targetInputId=''){modal(`<h1>Código manual</h1><p class="muted">Escribe o pega el código de barras.</p><input id="manualBarcodeValue" placeholder="Ej: 775..."><div class="actions"><button class="primary" onclick="useManualBarcode('${mode}','${targetInputId}')">Aceptar</button><button class="dark" onclick="closeModal()">Cancelar</button></div>`)}
+async function useManualBarcode(mode='query',targetInputId=''){const code=el('manualBarcodeValue').value.trim();if(!code)return toast('Escribe el código','bad');closeModal();if(mode==='fill'&&targetInputId){if(el(targetInputId))el(targetInputId).value=code;toast('Código agregado');return}if(el('scanQ'))el('scanQ').value=code;await scanSearch()}
+async function linkBarcodeToProduct(productId,barcode){if(!barcode)return toast('Falta código de barras','bad');showLoad('Vinculando código...');const r=await api(`/api/products/${productId}`,{method:'PUT',body:JSON.stringify({barcode})});hideLoad();if(!r.ok){toast(r.error||'No se pudo vincular','bad');return}toast('Código vinculado al producto');await loadClient()}
+async function startLiveImageCamera(){showScannerOverlay(`<div class="scanner-head"><h2>Buscar por imagen</h2><button class="dark" onclick="closeScannerOverlay()">Cerrar</button></div><div class="scanner-video-wrap"><video id="liveImageVideo" playsinline muted></video><div class="scan-frame"></div><div class="scan-line"></div></div><div class="scan-status" id="liveImageStatus">Apunta al producto</div><div class="actions"><button class="primary" onclick="captureLiveImageOnce()">Comparar ahora</button><button class="btn" onclick="el('scanGalleryFile')?.click();closeScannerOverlay()">Subir galería</button></div>`);const video=el('liveImageVideo');try{LIVE_IMG_STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=LIVE_IMG_STREAM;await video.play();LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;LIVE_IMG_BUSY=false;LIVE_IMG_TIMER=setInterval(()=>captureLiveFrameAndCompare(false),1800)}catch(e){if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo abrir cámara: '+e.message;toast('No se pudo abrir la cámara','bad')}}
+function stopLiveImageCamera(remove=true){if(LIVE_IMG_TIMER)clearInterval(LIVE_IMG_TIMER);LIVE_IMG_TIMER=null;LIVE_IMG_BUSY=false;LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;if(LIVE_IMG_STREAM){LIVE_IMG_STREAM.getTracks().forEach(t=>t.stop())}LIVE_IMG_STREAM=null;if(remove){const old=document.getElementById('scannerOverlay');if(old)old.remove()}}
+async function captureLiveImageOnce(){await captureLiveFrameAndCompare(true)}
+async function captureLiveFrameAndCompare(manual=false){const video=el('liveImageVideo');if(!video||!video.videoWidth||LIVE_IMG_BUSY)return;LIVE_IMG_BUSY=true;try{if(el('liveImageStatus'))el('liveImageStatus').textContent=manual?'Comparando ahora...':'Analizando producto...';const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.82));const fd=new FormData();fd.append('client_id',CLIENT.id);fd.append('image',new File([blob],'frame.jpg',{type:'image/jpeg'}));const r=await api('/api/products/detect',{method:'POST',body:fd});if(r.ok&&r.similar&&r.product){const pid=String(r.product.id);if(pid===LIVE_IMG_LAST)LIVE_IMG_REPEAT++;else{LIVE_IMG_LAST=pid;LIVE_IMG_REPEAT=1}if(el('liveImageStatus'))el('liveImageStatus').textContent=`Coincidencia ${LIVE_IMG_REPEAT}/2: ${productName(r.product)}`;if(manual||LIVE_IMG_REPEAT>=2){playScanBeep();stopLiveImageCamera(false);closeScannerOverlay(false);renderDetectResult(r)}}else{LIVE_IMG_LAST=null;LIVE_IMG_REPEAT=0;if(el('liveImageStatus'))el('liveImageStatus').textContent='Sin coincidencia segura. Sigue apuntando...'}}catch(e){if(el('liveImageStatus'))el('liveImageStatus').textContent='No se pudo comparar. Intenta de nuevo.'}finally{LIVE_IMG_BUSY=false}}
+
 function clientPOS(){if(!hasService("bodega_pos")&&!hasService("minimarket_pos")&&!hasService("almacen_pos"))return inactive();setTitle("Punto de venta","Carrito, cálculo y ticket");el("view").innerHTML=`<div class="card"><h1>Punto de venta</h1><div class="grid2"><input id="posQ" placeholder="Buscar producto por nombre/código"><button class="primary" onclick="posSearch()">Buscar</button></div><div id="posResults"></div><h2>Carrito</h2><div id="cart"></div><div class="total-box"><div class="price" id="cartTotal">${money(0)}</div></div><div class="grid2"><input id="saleCustomer" placeholder="Nombre del cliente"><input id="salePhone" placeholder="Celular WhatsApp del cliente"></div><select id="salePay"><option>Efectivo</option><option>Yape</option><option>Plin</option><option>Tarjeta</option></select><button class="primary full" onclick="finishSale()">Pagar y generar ticket</button></div>`;renderCart()}
 async function posSearch(){const r=await api(`/api/products/search?client_id=${CLIENT.id}&q=${encodeURIComponent(el("posQ").value)}`);el("posResults").innerHTML=(r.products||[]).map(p=>`<div class="list-card"><b>${safe(productName(p))}</b><div class="price">${money(p.sale_price)}</div><p>Stock: ${p.stock}</p><input id="qty_${p.id}" type="number" value="1"><button class="primary" onclick="addCart(${p.id})">Agregar al carrito</button></div>`).join("")||"No encontrado"}
 function addCart(id){const p=PRODUCTS.find(x=>x.id===id);const qty=Number(el("qty_"+id)?.value||1);CART.push({product_id:id,product_name:productName(p),quantity:qty,unit_price:p.sale_price,total:qty*p.sale_price});renderCart();toast("Agregado")}
